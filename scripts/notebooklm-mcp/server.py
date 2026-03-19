@@ -49,8 +49,26 @@ async def get_client():
     global _client
     if _client is None:
         try:
+            # Patch httpx to send browser-like User-Agent (Google rejects bare httpx requests)
+            import httpx as _httpx
+            _orig = _httpx.AsyncClient
+            class _BrowserClient(_orig):
+                def __init__(self, *a, **kw):
+                    h = dict(kw.pop("headers", {}) or {})
+                    h.setdefault("User-Agent", (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/131.0.0.0 Safari/537.36"
+                    ))
+                    super().__init__(*a, headers=h, **kw)
+            _httpx.AsyncClient = _BrowserClient
+
             from notebooklm import NotebookLMClient
-            _client = await NotebookLMClient.from_storage().__aenter__()
+            # from_storage() is async — await it, then enter context manager
+            client_obj = await NotebookLMClient.from_storage()
+            _client = await client_obj.__aenter__()
+
+            _httpx.AsyncClient = _orig  # restore
         except Exception as e:
             raise RuntimeError(
                 f"Failed to init NotebookLM client: {e}\n"
