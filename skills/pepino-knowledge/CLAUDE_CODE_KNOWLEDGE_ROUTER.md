@@ -79,12 +79,14 @@ Templates/         — шаблоны для Templater
 
 **Стандартные notebook пакеты:**
 
-- `pepino-market-intel` — рестораны BA, тренды, premium сегмент
-- `pepino-supplier-dd` — due diligence поставщиков
-- `pepino-capex-investor` — инвестиционные материалы, сценарии
-- `pepino-regulatory` — SENASA, ANMAT, законодательство
-- `pepino-agronomy-research` — болезни, технологии, climate-control
-- `pepino-ai-architecture` — prompt docs, eval outputs, schemas
+| Notebook                   | ID                                     | Назначение                               |
+| -------------------------- | -------------------------------------- | ---------------------------------------- |
+| `pepino-market-intel`      | `5ad0c41d-85a2-40b5-9461-e8de2cce33c3` | Рестораны BA, тренды, premium сегмент    |
+| `pepino-supplier-dd`       | `220a67b5-6eee-48be-ab9f-8e2855b4a32b` | Due diligence поставщиков                |
+| `pepino-capex-investor`    | `1817e0d0-b51a-4814-a81e-24c73e28a64d` | Инвестиционные материалы, сценарии CAPEX |
+| `pepino-regulatory`        | `8a947923-cc04-4ee4-8d7b-56b11d5ac43e` | SENASA, ANMAT, законодательство          |
+| `pepino-agronomy-research` | `302edbe8-768a-4e13-afc1-31bbc0f9f82f` | Болезни, технологии, climate-control     |
+| `pepino-ai-architecture`   | `c02daa98-e103-4082-bca4-3af0db15b0b5` | AI архитектура, prompt docs, schemas     |
 
 ---
 
