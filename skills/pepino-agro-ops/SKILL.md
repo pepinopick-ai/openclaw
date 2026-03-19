@@ -1,180 +1,227 @@
 ---
 name: pepino-agro-ops
-description: Agronomiya Pepino Pick
+description: "Ежедневные агрономические операции Pepino Pick — дневной журнал зон, параметры EC/pH/влажность/температура, ранняя диагностика болезней, планировщик посевов, учёт урожайности, техобслуживание оборудования. Авто-вызывай при словах: дневная проверка, проверить зоны, EC, pH, влажность, температура теплицы, урожай, срез, посев, инокуляция, блоки грибов, примордии, желтеют листья, пятна, плесень, техобслуживание, что в теплице, лог агрономии, записать урожай."
 homepage: https://pepino.pick
 metadata:
   openclaw:
-    emoji: seedling
+    emoji: "🌱"
     requires:
       bins: []
 ---
 
-# Pepino Agro-Ops
+# Pepino Agro-Ops — Ежедневные агрономические операции
 
-Zony: Zone-A=Ogurcy, Zone-B=Griby, Zone-C=Mikrozelen+Tsitsak
-Sheets ID: 1AB9nkHfCu8_12dwn72tWKZOiqHAfAhI3AHOjeAAByoc
+Управляет тремя зонами теплицы и ведёт операционный журнал.
 
-## Tselevye parametry
+**Зоны:**
 
-| Kultura    | EC      | pH      | Temp   | Vlazhnost |
-| ---------- | ------- | ------- | ------ | --------- |
-| Ogurcy     | 2.0-3.5 | 5.8-6.5 | 20-28C | 70-85%    |
-| Veshenka   | N/A     | 6.0-7.0 | 16-24C | 85-95%    |
-| Shiitake   | N/A     | 5.5-6.5 | 15-21C | 80-90%    |
-| Mikrozelen | 1.2-2.0 | 5.5-6.5 | 18-24C | 50-70%    |
-| Tsitsak    | 2.5-4.0 | 5.8-6.5 | 22-30C | 60-75%    |
+- **Zone-A** — Огурцы (гидропоника)
+- **Zone-B** — Грибы (вешенка + шиитаке)
+- **Zone-C** — Микрозелень + Цицак
 
-## 5 rezhimov
+**Google Sheets ID:** `1AB9nkHfCu8_12dwn72tWKZOiqHAfAhI3AHOjeAAByoc`
 
-### Rezhim 1 — Dnevnoj zhurnal
+---
 
-Shablon proverki:
+## Триггеры
 
-```
-DENNAYA PROVERKA — [data]
-Zone-A (Ogurcy):
-  EC: [X] TARGET: 2.0-3.5 [OK/ALERT]
-  pH: [X] TARGET: 5.8-6.5 [OK/ALERT]
-  Temp: [X]C  TARGET: 20-28 [OK/ALERT]
-  Vlazhnost: [X]%  TARGET: 70-85 [OK/ALERT]
-  Osmotr: [norma/zheltenie/pyatna/uvyadanie/plesenj]
-  Dejstvie: [chto sdelano]
+дневная проверка, проверить зоны, EC, pH, влажность теплицы, температура теплицы, урожай, срез, посев, инокуляция, блоки грибов, примордии, желтеют листья, пятна на листьях, плесень на блоках, техобслуживание, что в теплицах, лог агрономии, записать урожай, batch_id, sbor, agro, агрономия оперативная, Zone-A, Zone-B, Zone-C, вешенка, шиитаке, микрозелень, цицак, огурцы, полив, дренаж, болезнь растений
 
-Zone-B (Griby):
-  Temp: [X]C, Vlazhnost: [X]%
-  Blokov aktivnyx: [N]
-  Primordia: [da/net]
-  Osmotr: [norma/konkurentnyj grib]
+---
 
-Zone-C (Mikrozelen+Tsitsak):
-  EC: [X], pH: [X]
-  Podnosov: [N]
-  Tsitsak stadiya: [vegetaciya/cvetenie/plodonosenie]
-```
+## Целевые параметры по культурам
 
-ALERT pri vyhode -> Sheets/Alerdy:
+| Культура    | EC (мС/см) | pH      | Температура | Влажность |
+| ----------- | ---------- | ------- | ----------- | --------- |
+| Огурцы      | 2.0–3.5    | 5.8–6.5 | 20–28°C     | 70–85%    |
+| Вешенка     | N/A        | 6.0–7.0 | 16–24°C     | 85–95%    |
+| Шиитаке     | N/A        | 5.5–6.5 | 15–21°C     | 80–90%    |
+| Микрозелень | 1.2–2.0    | 5.5–6.5 | 18–24°C     | 50–70%    |
+| Цицак       | 2.5–4.0    | 5.8–6.5 | 22–30°C     | 60–75%    |
+
+---
+
+## Режим 1 — Дневной журнал
+
+**Шаблон дневной проверки:**
 
 ```
-Data | Agronomicheskij | Zone-X | pepino-agro-ops | opisanie | prioritet | otkryt
+ДНЕВНАЯ ПРОВЕРКА — [дата]
+
+Zone-A (Огурцы):
+  EC: [X] мС/см  TARGET: 2.0–3.5  [OK / АЛЕРТ]
+  pH: [X]         TARGET: 5.8–6.5  [OK / АЛЕРТ]
+  Температура: [X]°C  TARGET: 20–28  [OK / АЛЕРТ]
+  Влажность: [X]%     TARGET: 70–85  [OK / АЛЕРТ]
+  Осмотр: [норма / желтение / пятна / увядание / плесень]
+  Действие: [что сделано]
+
+Zone-B (Грибы):
+  Температура: [X]°C  Влажность: [X]%
+  Блоков активных: [N]
+  Примордии: [да / нет]
+  Осмотр: [норма / конкурентный гриб / зеленая плесень]
+
+Zone-C (Микрозелень + Цицак):
+  EC: [X]  pH: [X]
+  Подносов: [N]
+  Цицак стадия: [вегетация / цветение / плодоношение]
 ```
 
-### Rezhim 2 — Rannee obnaruzheniye boleznej
-
-| Simptom                | Prichina              | Prioritet | Dejstvie                         |
-| ---------------------- | --------------------- | --------- | -------------------------------- |
-| Zhyoltye listya (nizh) | Deficit N / starenie  | WARN      | Proverit EC, +N                  |
-| Korichnevye pyatna     | Botrytis / Alternaria | CRIT      | Snizit vlazhnost, fungicid       |
-| Belyj nalet            | Muchnistaya rosa      | CRIT      | Ventilyaciya, sernyjsprey        |
-| Uvyadanie dnem         | Voda / Fusarium       | CRIT      | Proverit poliv+substrat          |
-| Plesenj na blokax      | Konkuriruyuschij grib | CRIT      | Izolirovaty, proverit sterilnost |
-| Zhyoltye kolca         | Virusnaya infekciya   | CRIT      | Karantin, udalit rastenie        |
-
-ALERT sistema:
-
-- 1 simptom -> nablyudat, zapisyvat
-- 2+ symptoma ili 20%+ porazheniya -> ALERT v Sheets
-- Rasprostranenie 2+ zony -> KRITICHESKIJ ALERT
-
-### Rezhim 3 — Planirovschik posevov
-
-Cikly vyrashchivaniya:
-| Kultura | Posev-Sbor | Primechanie |
-|---|---|---|
-| Ogurcy | 45-60 dnej | Gidroponika, 2 cikla/kvartal |
-| Veshenka | 30-45 dnej | Posle inokulacii bloka |
-| Shiitake | 60-90 dnej | Trebuet stimulyacii |
-| Mikrozelen | 7-14 dnej | 4+ cikla/mesyac |
-| Tsitsak | 90-120 dnej | Mnogoletnik |
-
-Shablon mesyachnogo plana:
+**Запись в Sheets → лист "Агрономия":**
 
 ```
-PLAN POSEVOV — [mesyac god]
-Nedelya 1: [kultura] [X] sht, Zone-[X]
-Nedelya 2: sborovki + novye posevki
-Prognoz urozhaya mesyaca:
-  Ogurcy: ~[X] kg
-  Veshenka: ~[X] kg
-  Shiitake: ~[X] kg
-  Mikrozelen: ~[X] kg
-ITOGO: ~[X] kg
+Дата | Культура | batch_id | Событие | Кол-во(кг) | EC | pH | Примечание
 ```
 
-Zapis poseva v Sheets/Agronomiya:
+**Алерт при отклонении → лист "Алерты":**
 
 ```
-Data | Kultura | batch_id | Posev | kol-vo | EC | pH | Zone-X | Plan sbora: [data]
+Дата | Агрономический | Zone-X | pepino-agro-ops | описание | приоритет | открыт
 ```
 
-### Rezhim 4 — Urozhajnost po zonam
+---
 
-Shablon ezhenedelnogo otcheta:
+## Режим 2 — Ранняя диагностика болезней
+
+| Симптом             | Вероятная причина     | Приоритет | Действие                            |
+| ------------------- | --------------------- | --------- | ----------------------------------- |
+| Жёлтые листья (низ) | Дефицит N / старение  | WARN      | Проверить EC, добавить N            |
+| Коричневые пятна    | Botrytis / Alternaria | CRIT      | Снизить влажность, фунгицид         |
+| Белый налёт         | Мучнистая роса        | CRIT      | Вентиляция, серный спрей            |
+| Увядание днём       | Недополив / Fusarium  | CRIT      | Проверить полив + субстрат          |
+| Плесень на блоках   | Конкурентный гриб     | CRIT      | Изолировать, проверить стерильность |
+| Жёлтые кольца       | Вирусная инфекция     | CRIT      | Карантин, удалить растение          |
+
+**Правило эскалации:**
+
+- 1 симптом → наблюдать, записывать
+- 2+ симптома или 20%+ поражения → АЛЕРТ в Sheets
+- Распространение 2+ зон → КРИТИЧЕСКИЙ АЛЕРТ → `pepino-qa-food-safety` + `pepino-risk`
+
+---
+
+## Режим 3 — Планировщик посевов
+
+**Циклы выращивания:**
+
+| Культура    | Посев → Сбор | Примечание              |
+| ----------- | ------------ | ----------------------- |
+| Огурцы      | 45–60 дней   | Гидропоника, 2 цикла/кв |
+| Вешенка     | 30–45 дней   | После инокуляции блока  |
+| Шиитаке     | 60–90 дней   | Требует стимуляции      |
+| Микрозелень | 7–14 дней    | 4+ циклов/месяц         |
+| Цицак       | 90–120 дней  | Многолетник             |
+
+**Шаблон месячного плана:**
 
 ```
-UROZHAJNOST — [period]
-Zone-A Ogurcy:
-  Fakt: [X] kg  Target: [X] kg  Raznitsa: [+/-X]% [OK/NIZHE NORMY]
-Zone-B Griby:
-  Veshenka: [X] kg ([N] blokov, [X] kg/blok)
-  Shiitake: [X] kg ([N] blokov, [X] kg/blok)
+ПЛАН ПОСЕВОВ — [месяц год]
+
+Неделя 1: [культура] [N] шт, Zone-[X]
+Неделя 2: сборка + новые посевы
+Неделя 3: [культура] [N] шт
+Неделя 4: итоговый осмотр
+
+Прогноз урожая месяца:
+  Огурцы:      ~[X] кг
+  Вешенка:     ~[X] кг
+  Шиитаке:     ~[X] кг
+  Микрозелень: ~[X] кг
+ИТОГО: ~[X] кг
+```
+
+**Запись посева в Sheets:**
+
+```
+Дата | Культура | batch_id | Посев | кол-во | EC | pH | Zone-X | План сбора: [дата]
+```
+
+---
+
+## Режим 4 — Учёт урожайности
+
+**Шаблон еженедельного отчёта:**
+
+```
+УРОЖАЙНОСТЬ — [период]
+
+Zone-A Огурцы:
+  Факт: [X] кг  Таргет: [Y] кг  Разница: [±Z]%  [OK / НИЖЕ НОРМЫ]
+Zone-B Грибы:
+  Вешенка: [X] кг ([N] блоков, [X] кг/блок)
+  Шиитаке: [X] кг ([N] блоков, [X] кг/блок)
 Zone-C:
-  Mikrozelen: [X] kg ([N] podnosov)
-  Tsitsak: [X] kg
-ITOGO: [X] kg  vs proshlaya nedelya: [+/-X]%
+  Микрозелень: [X] кг ([N] подносов)
+  Цицак: [X] кг
+
+ИТОГО: [X] кг  vs прошлая неделя: [±X]%
 ```
 
-### Rezhim 5 — Texnicheskoe obsluzhivanie
+---
 
-Ezhednevno: proverka drenazha, vizualnyj osmotr
-Ezhenedelno: kalibraciya EC/pH, ochistka filtrov
-Ezhemesyachno: zamena rastvora, proverka nasosov, dezinfekciya Zone-B
-Ezhekvartalijno: zamena lamp, audit orosheniya
+## Режим 5 — Техническое обслуживание
 
-Shablon TO:
+**Расписание ТО:**
 
-```
-TO — [data] [tip]
-Zona: [A/B/C/Vse]
-Vypolneno: [spisok rabot]
-Najdeno: [problemy ili norma]
-Sleduyuschee TO: [data]
-```
+- Ежедневно: проверка дренажа, визуальный осмотр
+- Еженедельно: калибровка EC/pH, очистка фильтров
+- Ежемесячно: замена раствора, проверка насосов, дезинфекция Zone-B
+- Ежеквартально: замена ламп, аудит орошения
 
-Zapis v Sheets/Zadachi:
+**Шаблон ТО:**
 
 ```
-Data | TO-[tip] | Agronomiya | [otvetstvennyj] | [prioritet] | [dedlajn] | status
+ТО — [дата] [тип: ежедневное / еженедельное / ежемесячное]
+Зона: [A / B / C / Все]
+Выполнено: [список работ]
+Найдено: [проблемы или норма]
+Следующее ТО: [дата]
 ```
 
-## KPI agronomii
+**Запись в Sheets → лист "Задачи":**
 
 ```
-AGRONOMIYA KPI
-  Urozhajnost ogurcev: [X] kg/m2 (target: [Y])
-  Effektivnost blokov: [X] kg/blok (target: [Y])
-  Mikrozelen/nedelyu: [N] podnosov
-  Otxodnost: [X]% tovarnoj produkcii
-  Aktivnyx ALERT: [N]
-  Sleduyuschij posev: [data]
+Дата | ТО-[тип] | Агрономия | [ответственный] | [приоритет] | [дедлайн] | статус
 ```
 
-## Integracii
+---
 
-- pepino-google-sheets — Agronomiya / Alerdy / Zadachi
-- pepino-qa-food-safety — peredacha batch_id
-- pepino-fermentation — otxody -> fermentaciya (waste-to-value)
-- pepino-controller — urozhajnost v P&L
-- pepino-weekly-review — dannye v ezhenedelnyj dajdzhest
-- pepino-agro-cucumber-photos — foto diagnostika ogurca
-
-## Primery komand
+## KPI агрономии
 
 ```
-Dnevnaya proverka: Zone-A EC 3.2, pH 6.1, temp 24, vlazhnost 78
-U shiitake blokov belyj nalet — chto delat?
-Sostavit plan posevov na aprel
-Otchet urozhajnosti za proshluyu nedelyu
-Vnesti v grafik: kalibraciya EC v pyatnitsu
-Kakie bloki shiitake gotovy k sboru?
-Zapisat sbor: Zone-A ogurcy 45 kg, batch BATCH-20260319-001
+АГРОНОМИЯ KPI
+  Урожайность огурцов: [X] кг/м² (таргет: [Y])
+  Эффективность блоков: [X] кг/блок (таргет: вешенка 3–4 кг)
+  Микрозелень/неделю: [N] подносов
+  Отходность: [X]% товарной продукции (норма <5%)
+  Активных АЛЕРТОВ: [N]
+  Следующий посев: [дата]
+```
+
+---
+
+## Интеграция
+
+| Навык                         | Когда                                         |
+| ----------------------------- | --------------------------------------------- |
+| `pepino-google-sheets`        | Записать журнал → Агрономия / Алерты / Задачи |
+| `pepino-qa-food-safety`       | Болезнь → batch_id трассировка                |
+| `pepino-fermentation`         | Отходы → waste-to-value                       |
+| `pepino-controller`           | Урожайность → P&L                             |
+| `pepino-weekly-review`        | Данные → еженедельный дайджест                |
+| `pepino-agro-cucumber-photos` | Фото → визуальная диагностика                 |
+| `pepino-risk`                 | Массовая болезнь → кризисный сценарий A       |
+
+## Формат ответа
+
+```
+case_id: CASE-[YYYYMMDD]-AGR
+intent: agro_[journal|disease|planting|yield|maintenance]
+
+[результат по режиму]
+
+alerts: [список активных алертов или "нет"]
+next_actions:
+  - [действие] — [ответственный] — [срок]
 ```

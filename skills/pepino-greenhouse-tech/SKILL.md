@@ -1,6 +1,6 @@
 ---
 name: pepino-greenhouse-tech
-description: "Inzhenernye raschety teplicy — osveschenie PPFD/DLI, HVAC/CO2, irrigaciya, energoaudit. Avto-vyzyvaj pri slovax: PPFD, DLI, osveschenie, LED, HVAC, CO2, otoplenie, ventilyaciya, poliv, energoaudit, tochka rosy, nasos."
+description: "Инженерные расчёты теплицы Pepino Pick — освещение PPFD/DLI, микроклимат HVAC/CO2, ирригация и питательный раствор, энергоаудит, подбор оборудования. Авто-вызывай при словах: PPFD, DLI, освещение теплицы, сколько ламп, LED расчёт, HVAC, CO2 теплица, отопление расчёт, вентиляция расчёт, точка росы, теплопотери, полив расчёт, объём бака, насос подобрать, энергоаудит теплицы, расход электричества, ROI замены ламп."
 homepage: https://pepino.pick
 metadata:
   openclaw:
@@ -9,109 +9,179 @@ metadata:
       bins: []
 ---
 
-# Pepino Greenhouse Tech — Inzhenernye Raschety
+# Pepino Greenhouse Tech — Инженерные расчёты теплицы
 
-Raschety osvescheniya, mikroklimata, irrigacii, energopotrebleniya.
+Расчёты освещения, микроклимата, ирригации, энергопотребления.
 
-## 4 rezhima
+---
 
-### Rezhim 1 — Osveschenie (PPFD/DLI)
+## Триггеры
 
-Formuly:
-DLI = PPFD x fotoperiod (chasy) x 3600 / 1000000
-PPFD_trebuemyj = DLI_target / (fotoperiod x 3.6)
+PPFD, DLI, освещение теплицы, сколько ламп нужно, LED расчёт, фотопериод, световой поток, HVAC, CO2 теплица, отопление расчёт, вентиляция теплицы, точка росы, теплопотери, психрометрия, конденсат, полив расчёт, объём бака, давление насоса, капельный полив, dripline, энергоаудит, расход электричества месяц, ROI замены ламп, кВт теплица, таблица расходов энергии, инженерный расчёт, подбор оборудования
 
-Targety DLI po kulturam:
-| Kultura | DLI target (mol/m2/d) | Fotoperiod |
-|---|---|---|
-| Ogurcy | 20-30 | 16-18h |
-| Veshenka | 2-5 | 12h |
-| Shiitake | 1-3 | 12h |
-| Mikrozelen | 10-16 | 16h |
-| Tsitsak | 18-25 | 16h |
+---
 
-Raschet kolichestva lamp:
-N_lamp = (PPFD_target x Ploshadj_m2) / Svetovoj_potok_lampy
+## Режим 1 — Освещение (PPFD / DLI)
 
-Komanda:
-Rasschetaj PPFD dlya Zone-A: 120m2, cel DLI 25, fotoperiod 16h
-Skolko lamp LED 640 Vt nado dlya Zone-C 30m2, PPFD 250?
-
-### Rezhim 2 — HVAC, CO2, mikroklimat
-
-Teplopoteri (prostoj raschet):
-Q = U-faktor x Ploshadj x (Tvnutri - Tnaruzhi)
-U-faktor teplicy (polikarbonat 16mm): 1.8-2.5 W/m2K
-U-faktor steklo: 2.8-3.0 W/m2K
-
-Psixrometriya:
-Tochka rosy = T - (100 - RH) / 5 (priblizitelno)
-Kondensaciya esli Tpoverhnosti < Tochki rosy
-
-CO2 enrichment:
-Target: 800-1200 ppm (ambientnyj: 420 ppm)
-Prirост urozhaya: +20-30% pri CO2 1000 ppm
-Rashod CO2: ~1-2 kg/h na 100m2 pri gerchetichnosti
-
-Ventilyaciya:
-Kratnost vozduhoobmena: 30-60 raz/chas (dlya teplicy)
-V_ventilyatora = Ob_em_teplicy x Kratnost / 60
-
-Komanda:
-Rasschetaj teplopoteri Zone-A: 200m2, U=2.0, inside 24C, outside -5C
-Tochka rosy pri temp 22C i vlazhnosti 85%?
-Skolko CO2 v chas nuzhno dlya teplicy 500m3?
-
-### Rezhim 3 — Irrigaciya i pitatelnyj rastvor
-
-Gidroponicheskie raschety:
-EC_target: 2.0-3.5 mS/cm dlya ogurcev
-Rashod vody: 1-3 L/m2/sutki (gidroponika)
-Ob_em_bakа_min = Rashod_vody x Ploshadj x Zapas_dnej
-
-Pompa:
-Davlenie = Vysota_podacha (m) x 0.1 (bar) + Poteri_trenie
-Proizvoditelnost pompy >= Rashod_vody x Ploshadj / Vremya_poliva
-
-Dripline raschety:
-Kolichestvo kapelnic = Ploshadj / Rashod_kapelnicy x Koef
-Davlenie dripline: 1.0-2.5 bar
-
-Komanda:
-Rasschetaj ob_em baka dlya Zone-A 100m2, 3L/m2/den, zapas 3 dnya
-Kakuyu pompu podobrat dlya podachi vody na vysotu 4m, 500m2?
-
-### Rezhim 4 — Energoaudit
-
-Raschet energopotrebleniya:
-LED lampy: Kolichestvo x Moschnost_Vt / 1000 = kVt
-Klivcheskie nagruzki: LED + Nasosy + Ventilyaciya + Otoplenie
-Sutochnoe: Sum(kVt x Chasy_raboty)
-Mesyachnoe: Sutochnoe x 30
-
-Cost analysis:
-Stoimost_kVth = [tarifARS] ARS/kVth
-Rashod_ARS_mesyac = kVth_mesyac x Tarit
-ROI_LED = (Ekonomiya_vs_HPS x 12) / Stoimost_investicij
-
-Komanda:
-Energoaudit teplicy: 80 lamp LED 640Vt 16h/d, 3 nasosy 1.5kVt 4h/d
-ROI zameny HPS na LED: 60 lamp HPS 1000Vt -> LED 640Vt, cena LED 45000 ARS
-Mesyachnyj rashod na elektrichestvo pri tarite 150 ARS/kVth
-
-## Integracii
-
-- pepino-agro-ops — energoaudit + parametry osvescheniya v zhurnal
-- pepino-controller — energozatraty v P&L
-- pepino-weekly-review — tehnicheskie KPI v digest
-
-## Primery komand
+**Ключевые формулы:**
 
 ```
-Rasschetaj DLI Zone-A: PPFD 280, fotoperiod 16h
-Skolko svetodiodn. lamp dlya 120m2 pri PPFD 250?
-Teplopoteri pri -10C snaruzhi i +22C vnutri, 300m2 polikarbonat
-Tochka rosy: temp 20C, vlazhnost 90%
-Energopotreblenie: 60 lamp 640Vt po 16h + 4 nasosy 1.5kVt 6h
-Ob_em baka: 80m2, poliv 2L/m2/den, zapas 5 dnej
+DLI (mol/m²/d) = PPFD × фотопериод_часы × 3600 / 1,000,000
+PPFD_требуемый = DLI_target / (фотопериод × 3.6)
+Кол-во_ламп = (PPFD_target × Площадь_м²) / Световой_поток_лампы
+```
+
+**Таргеты DLI по культурам:**
+
+| Культура    | DLI таргет (mol/m²/d) | Фотопериод |
+| ----------- | --------------------- | ---------- |
+| Огурцы      | 20–30                 | 16–18 ч    |
+| Вешенка     | 2–5                   | 12 ч       |
+| Шиитаке     | 1–3                   | 12 ч       |
+| Микрозелень | 10–16                 | 16 ч       |
+| Цицак       | 18–25                 | 16 ч       |
+
+**Примеры расчётов:**
+
+```
+Запрос: Zone-A 120 м², цель DLI 25, фотопериод 16 ч
+  PPFD = 25 / (16 × 3.6) = 434 мкмоль/м²/с
+  При LED 640 Вт с потоком 1800 мкмоль/с на 1.5 м²:
+  Ламп = (434 × 120) / 1800 = 29 ламп
+
+Запрос: Zone-C 30 м², PPFD 250, LED 320 Вт (поток 900 мкмоль/с на 1 м²)
+  Ламп = (250 × 30) / 900 = 8 ламп
+```
+
+---
+
+## Режим 2 — HVAC, CO2, микроклимат
+
+**Теплопотери:**
+
+```
+Q (Вт) = U-фактор × Площадь_м² × (T_внутри - T_снаружи)
+
+U-факторы материалов:
+  Поликарбонат 16 мм: 1.8–2.5 Вт/м²·К
+  Стекло одинарное:   2.8–3.0 Вт/м²·К
+  Стекло двойное:     1.2–1.5 Вт/м²·К
+
+Пример: Zone-A 200 м², U=2.0, внутри +24°C, снаружи -5°C
+  Q = 2.0 × 200 × (24 - (-5)) = 11,600 Вт = 11.6 кВт
+```
+
+**Психрометрия:**
+
+```
+Точка росы ≈ T - (100 - RH) / 5  (°C, приблизительно)
+Конденсация если T_поверхности < T_точки_росы
+
+Пример: T=22°C, RH=85%
+  Точка росы ≈ 22 - (100 - 85) / 5 = 22 - 3 = 19°C
+  → поверхности холоднее 19°C будут потеть
+```
+
+**CO2 обогащение:**
+
+```
+Таргет: 800–1200 ppm (ambient: 420 ppm)
+Прирост урожая: +20–30% при CO2 1000 ppm
+Расход CO2: ~1–2 кг/ч на 100 м² (при герметичности)
+
+Вентиляция:
+  Кратность воздухообмена: 30–60 раз/час (теплица)
+  V_вентилятора = Объём_теплицы × Кратность / 60 (м³/мин)
+```
+
+---
+
+## Режим 3 — Ирригация и питательный раствор
+
+**Гидропоника:**
+
+```
+EC таргет: 2.0–3.5 мС/см (огурцы), 1.2–2.0 (микрозелень)
+Расход воды: 1–3 л/м²/сутки (гидропоника)
+Объём бака = Расход × Площадь × Запас_дней
+
+Пример: Zone-A 100 м², 3 л/м²/день, запас 3 дня
+  Бак = 3 × 100 × 3 = 900 л → минимум 1000 л
+```
+
+**Подбор насоса:**
+
+```
+Давление = Высота_подачи (м) × 0.1 (бар) + Потери_трение
+Производительность насоса ≥ Расход_воды × Площадь / Время_полива
+
+Пример: высота 4 м, площадь 500 м², 2 л/м²/день, полив 2 ч/день
+  Давление ≥ 4 × 0.1 + 0.3 = 0.7 бар → берём 1.5 бар
+  Производительность ≥ (2 × 500) / 2 = 500 л/ч
+```
+
+**Dripline:**
+
+```
+Кол-во капельниц = (Площадь / Шаг_капельниц) × Ряды
+Давление dripline: 1.0–2.5 бар
+Расход капельницы: 2–4 л/ч (стандарт)
+```
+
+---
+
+## Режим 4 — Энергоаудит
+
+**Расчёт потребления:**
+
+```
+Нагрузка (кВт) = Кол-во_ламп × Мощность_Вт / 1000
+Суточное потребление = Σ(кВт × часы_работы)
+Месячное = Суточное × 30
+
+Пример:
+  80 ламп LED 640 Вт × 16 ч = 819 кВт·ч/сут
+  3 насоса 1.5 кВт × 4 ч = 18 кВт·ч/сут
+  Вентиляция 2 кВт × 24 ч = 48 кВт·ч/сут
+  ИТОГО/день: 885 кВт·ч  |  /мес: 26,550 кВт·ч
+```
+
+**Cost analysis:**
+
+```
+Стоимость ARS/мес = кВт·ч_месяц × Тариф_ARS/кВт·ч
+
+ROI замены HPS → LED:
+  Экономия_кВт = (Мощность_HPS - Мощность_LED) × Часы_работы
+  ROI = (Экономия_кВт × Тариф × 12) / Стоимость_LED_ламп × 100%
+
+Пример: 60 ламп HPS 1000 Вт → LED 640 Вт, тариф 150 ARS/кВт·ч
+  Экономия: (1000-640) × 60 × 16 / 1000 = 345 кВт·ч/день
+  Экономия ARS/год: 345 × 30 × 12 × 150 = 18,630,000 ARS/год
+```
+
+---
+
+## Интеграция
+
+| Навык                  | Когда                              |
+| ---------------------- | ---------------------------------- |
+| `pepino-agro-ops`      | Параметры освещения → журнал зоны  |
+| `pepino-controller`    | Энергозатраты → P&L                |
+| `pepino-capital`       | CAPEX на оборудование → ROI оценка |
+| `pepino-weekly-review` | Технические KPI → дайджест         |
+
+## Формат ответа
+
+```
+case_id: CASE-[YYYYMMDD]-ENG
+intent: tech_[lighting|hvac|irrigation|energy]
+
+[расчёт с формулами и результатами]
+
+result_summary:
+  [ключевая цифра]: [значение] [единица]
+equipment_recommendation: [если применимо]
+next_actions:
+  - [действие] — [срок]
 ```
