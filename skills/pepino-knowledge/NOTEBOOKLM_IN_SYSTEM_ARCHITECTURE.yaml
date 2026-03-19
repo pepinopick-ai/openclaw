@@ -1,0 +1,31 @@
+# NOTEBOOKLM_IN_SYSTEM_ARCHITECTURE.yaml
+version: 1.0
+component: notebooklm_research_layer
+role:
+  notebooklm: source_grounded_research_workspace
+  claude_code: orchestration_and_normalization_layer
+  mcp_server: tool_adapter
+  case_store: canonical_case_truth
+  audit_log_store: immutable_control_log
+  dashboard_data_store: canonical_kpi_serving_layer
+  file_storage: controlled_document_repository
+routing_principle:
+  all_requests_enter_via: front_door_orchestrator
+  notebooklm_is_not_entrypoint: true
+  notebooklm_is_not_source_of_truth: true
+flow:
+  - owner_request
+  - front_door_orchestrator_opens_case
+  - claude_code_decides_if_notebooklm_needed
+  - mcp_tool_creates_or_updates_notebook
+  - sources_are_added
+  - notebooklm_outputs_brief
+  - claude_code_normalizes_output
+  - result_saved_to_case_memo_or_report
+  - approval_and_logging_happen_in_canonical_systems
+guardrails:
+  - no_case_status_in_notebooklm
+  - no_approval_truth_in_notebooklm
+  - no_kpi_source_values_from_notebooklm
+  - no_legal_signoff_from_notebooklm
+  - no_payment_authorization_from_notebooklm
