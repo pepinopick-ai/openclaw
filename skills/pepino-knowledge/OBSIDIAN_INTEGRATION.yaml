@@ -1,0 +1,176 @@
+# OBSIDIAN_INTEGRATION.yaml
+# Pepino Pick Knowledge Layer v2.0 - 2026-03-19
+
+meta:
+  role: knowledge_layer
+  NOT_operational_ssot: true
+  operational_ssot: google_sheets
+  sheets_id: "1AB9nkHfCu8_12dwn72tWKZOiqHAfAhI3AHOjeAAByoc"
+  vault_repo: "https://github.com/pepinopick-ai/pepino-obsidian"
+  vault_server: "/home/roman/pepino-obsidian/"
+  vault_local_windows: "C:\\Users\\Roman\\pepino-obsidian"
+
+use_obsidian_for:
+  sop_navigation:
+    folder: "04_sops_index"
+    description: "Indeksy SOPov so ssylkami na Google Drive"
+  lessons_learned:
+    folder: "06_lessons_learned"
+    description: "Uroki iz incidentov i eksperimentov"
+    trigger: "Posle kazhdogo znachimogo incidenta"
+  postmortems:
+    folder: "07_postmortems"
+    description: "Razbor oshibok — root cause, impact, fix, prevention"
+    trigger: "Posle incidentov urovnya RED"
+  decision_memos:
+    folder: "03_decision_memos"
+    description: "Arxiv reshenij s kontekstom i alternativami"
+  weekly_review_prep:
+    folder: "01_dashboard_notes"
+    description: "Zametki dlya podgotovki k ezhenedelnomu obzoru"
+  architecture_ai:
+    folder: "09_architecture_ai"
+    description: "Arxitekturnye resheniya po AI sisteme"
+  training:
+    folder: "08_training"
+    description: "Obuchayuschie materialy dlya komandy"
+  playbooks:
+    folder: "05_playbooks"
+    description: "Poshagovy scenarii dlya povtoryaemyx situacij"
+  people_profiles:
+    folder: "11_people"
+    description: "Profili lyudej — partnery, postavschiki, shefy"
+  market_intel:
+    folder: "12_market_intel"
+    description: "Rynochnayu razvedka, trendy, konkurenty"
+  cases_context:
+    folder: "02_cases_context"
+    description: "Rasshirennyj kontekst dlya case_id iz dispatcher"
+  projects:
+    folder: "10_projects"
+    description: "Treking RD proektov i eksperimentov"
+
+do_NOT_use_obsidian_for:
+  case_status: "Sheets/Zadachi — operational state"
+  approvals: "Sheets/Alerdy — audit trail"
+  payments: "Sheets/Finansy"
+  kpi_source_values: "Sheets/Dashboard — operacionnye dannye"
+  inventory: "Sheets/Logistika"
+  batch_status: "Sheets/Agronomiya"
+  audit_logs: "Sheets/Alerdy — oficialnyj audit"
+
+vault_structure:
+  00_inbox:
+    purpose: "Vxodyaschie — razobrat za 48h"
+  01_dashboard_notes:
+    purpose: "CEO notes, weekly prep, flash notes"
+    naming: "YYYY-MM-DD-[tema].md"
+  02_cases_context:
+    purpose: "Kontekst dlya case_id"
+    naming: "CASE-YYYYMMDD-XXX-context.md"
+  03_decision_memos:
+    purpose: "Arxiv reshenij"
+    naming: "DEC-YYYYMMDD-[tema].md"
+  04_sops_index:
+    purpose: "Navigacionnyj indeks SOPov"
+    subfolders: [agronomy, fermentation, qa_food_safety, logistics, finance, hr]
+  05_playbooks:
+    purpose: "Takticheskie gajdy"
+    naming: "PB-[tema].md"
+  06_lessons_learned:
+    purpose: "Uroki iz opyta"
+    naming: "LL-YYYYMMDD-[tema].md"
+  07_postmortems:
+    purpose: "Razbor oshibok"
+    naming: "PM-YYYYMMDD-[incident].md"
+    required_sections: ["## Chto proizoshlo", "## Root Cause", "## Impact", "## Fix Applied", "## Prevention"]
+  08_training:
+    subfolders: [onboarding, agronomy, fermentation, sales, operations]
+  09_architecture_ai:
+    purpose: "AI sistema, dizajn-spek, routing logic"
+  10_projects:
+    subfolders: [active, completed, archived]
+  11_people:
+    subfolders: [clients, suppliers, partners, team, osint]
+  12_market_intel:
+    naming: "MI-YYYYMMDD-[tema].md"
+  99_archive:
+    purpose: "Arxiv ustarevshix — ne udalyat"
+  Templates:
+    purpose: "Shablony dlya Templater plugin"
+
+required_frontmatter:
+  id:
+    format: "[type]-YYYYMMDD-[slug]"
+    examples:
+      - "LL-20260319-mushroom-batch-contamination"
+      - "DEC-20260315-switch-substrate-supplier"
+      - "PM-20260301-delivery-failure"
+  title: "Chelovekochitaemyj zagolovok"
+  type:
+    values: [lesson, decision, postmortem, sop, playbook, training,
+             architecture, project, person, market_intel, weekly_review,
+             case_context, inbox]
+  status:
+    values: [draft, active, superseded, archived]
+  owner: "roman | [imya sotrudnika]"
+  created_at: "YYYY-MM-DD"
+  updated_at: "YYYY-MM-DD"
+  linked_cases:
+    type: array
+    format: "CASE-YYYYMMDD-XXX"
+  linked_entities:
+    type: array
+  linked_sops:
+    type: array
+    format: "SOP-XXX"
+  linked_agents:
+    type: array
+  tags:
+    type: array
+  confidentiality:
+    values: [internal, restricted, confidential]
+    default: internal
+
+agent_integration:
+  read_vault:
+    path: "/home/roman/pepino-obsidian/"
+    use_cases:
+      - "pepino-knowledge chitaet SOP indeksy"
+      - "pepino-dispatcher proveryaet decision memos"
+      - "pepino-weekly-review chitaet dashboard notes"
+  write_rules:
+    - "Tolko cherez pepino-knowledge — validaciya frontmatter"
+    - "Vsegda ukazyvat linked_cases dlya trassiruemosti"
+    - "Ne periezapisyvat bez update_existing=true"
+  auto_create_triggers:
+    - event: "Incident RED"
+      creates: "07_postmortems/PM-[date]-[incident].md"
+      via: "pepino-qa-food-safety"
+    - event: "Novoe reshenie (DEC approval)"
+      creates: "03_decision_memos/DEC-[date]-[topic].md"
+      via: "pepino-dispatcher"
+    - event: "Batch zavershyon s anomaliej"
+      creates: "06_lessons_learned/LL-[date]-[batch].md"
+      via: "pepino-fermentation"
+    - event: "Novyj Tier 1 klient"
+      creates: "11_people/clients/[name].md"
+      via: "pepino-sales-crm"
+  sync:
+    plugin: "Obsidian Git"
+    auto_commit: "kazhdye 30 min"
+    backup: "GitHub pepinopick-ai/pepino-obsidian"
+
+sheets_obsidian_boundary:
+  sheets_owns:
+    - "statusy operacij"
+    - "KPI i metriki (chisla)"
+    - "tranzakcii i finansovye dannye"
+    - "statusy kejsov i zadach"
+    - "batch-logi i agronomicheskie dannye"
+  obsidian_owns:
+    - "pochemu (kontekst reshenij)"
+    - "chto uznal (uroki i postmortemar)"
+    - "kak delat (playbooks + SOP indeksy)"
+    - "kto eti lyudi (profili partnyorov)"
+    - "AI arxitektura i dizajn-spek"
