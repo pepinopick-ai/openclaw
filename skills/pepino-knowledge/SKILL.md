@@ -178,12 +178,102 @@ pepino-obsidian/
 2. **iCloud** — бесплатно, Mac/iOS
 3. **Git sync** — с контролем версий, ручной на мобильном
 
-**Интеграция агентов:**
+**Интеграция агентов — полный write protocol:**
 
-- `pepino-knowledge` читает Obsidian через файловую систему (`~/pepino-obsidian/`)
-- `pepino-weekly-review` → авто-сохраняет дайджест в `00-CEO-Dashboard/`
-- Решения из Sheets → sync скрипт → `03-Decisions/`
-- CEO может делать заметки в Obsidian → агенты читают через `pepino-knowledge`
+Vault path: `/home/roman/pepino-obsidian/`
+
+### Как ЗАПИСАТЬ заметку в Obsidian (агент использует Write tool)
+
+```python
+# 1. Определить тип и папку по таблице:
+note_type → папка:
+  decision_memo  → 03_decision_memos/
+  sop_index      → 04_sops_index/
+  lesson         → 06_lessons_learned/
+  postmortem     → 07_postmortems/
+  research       → 11_market_intel/
+  architecture   → 09_architecture_ai/
+  person_profile → 12_partner_investor_research/
+  case_context   → 02_cases_context/
+  project_brief  → 10_projects/
+  training       → 08_training/
+
+# 2. Сформировать имя файла по конвенции:
+  decision_memo__[domain]__[slug]__v1.md
+  lesson__[domain]__[slug]__v1.md
+  postmortem__[domain]__[incident]__[YYYYMMDD].md
+  research__[domain]__[topic]__v1.md
+  person__[lastname]_[firstname]__v1.md
+
+# 3. Использовать обязательный frontmatter:
+---
+id: [type]-[YYYYMMDD]-[slug]
+title: "[заголовок]"
+type: [тип из allowed list]
+status: draft
+owner: roman
+created_at: YYYY-MM-DD
+updated_at: YYYY-MM-DD
+linked_cases: [CASE-YYYYMMDD-XXX]
+linked_entities: []
+linked_sops: []
+linked_agents: []
+tags: []
+confidentiality: internal
+---
+
+# 4. Записать через Write tool:
+   file_path: /home/roman/pepino-obsidian/[папка]/[имя_файла].md
+```
+
+### Примеры конкретных write-операций
+
+```
+# Решение после кейса:
+/home/roman/pepino-obsidian/03_decision_memos/decision_memo__finance__change_pricing_q1__v1.md
+
+# Урок после инцидента:
+/home/roman/pepino-obsidian/06_lessons_learned/lesson__agronomy__powdery_mildew_night_humidity__v1.md
+
+# Разбор болезни (постмортем):
+/home/roman/pepino-obsidian/07_postmortems/postmortem__agronomy__botrytis_zone_a__20260319.md
+
+# Market research из NotebookLM:
+/home/roman/pepino-obsidian/11_market_intel/research__market__premium_mushrooms_ba_2026__v1.md
+
+# Профиль шефа / поставщика:
+/home/roman/pepino-obsidian/12_partner_investor_research/person__garces_pablo__v1.md
+
+# Контекст кейса:
+/home/roman/pepino-obsidian/02_cases_context/case_context__CASE-20260319-FIN.md
+```
+
+### Как ЧИТАТЬ из Obsidian (агент использует Read tool)
+
+```python
+# Поиск по типу:
+Grep pattern="type: lesson" path="/home/roman/pepino-obsidian/"
+
+# Поиск по тегу или домену:
+Grep pattern="agronomy" path="/home/roman/pepino-obsidian/"
+
+# Конкретный файл:
+Read file_path="/home/roman/pepino-obsidian/03_decision_memos/..."
+
+# Inbox:
+Glob pattern="/home/roman/pepino-obsidian/00_inbox/*.md"
+```
+
+### Автоматические write-операции (когда скиллы пишут в vault)
+
+| Скилл                       | Событие                  | Папка Obsidian              | Тип           |
+| --------------------------- | ------------------------ | --------------------------- | ------------- |
+| pepino-agro-cucumber-photos | 🔴 diagnosis confirmed   | 07_postmortems/             | postmortem    |
+| pepino-dispatcher           | NotebookLM research done | 11_market_intel/ или соотв. | research      |
+| pepino-weekly-review        | weekly review complete   | 01_dashboard_notes/         | case_context  |
+| pepino-shadow-ceo           | strategic decision made  | 03_decision_memos/          | decision_memo |
+| pepino-knowledge            | new lesson captured      | 06_lessons_learned/         | lesson        |
+| pepino-qa-food-safety       | incident postmortem      | 07_postmortems/             | postmortem    |
 
 **Что НЕ ставить в Obsidian:**
 
@@ -258,16 +348,16 @@ nblm_create_note(t, content)  → сохранить вывод в notebook
 nblm_generate_brief(topic, [questions]) → полный research brief
 ```
 
-**Рекомендуемые постоянные notebooks:**
+**Рекомендуемые постоянные notebooks (актуальные IDs):**
 
-```
-pepino-market-intel    → рынок, рестораны, тренды BA
-pepino-supplier-dd     → due diligence поставщиков
-pepino-agronomy-res    → болезни, технологии, trials
-pepino-regulations     → labeling, HACCP, compliance
-pepino-ai-architecture → prompt docs, eval outputs
-pepino-investor-pack   → инвест-мемо, сценарии
-```
+| Notebook                   | ID                                     | Назначение                               |
+| -------------------------- | -------------------------------------- | ---------------------------------------- |
+| `pepino-market-intel`      | `5ad0c41d-85a2-40b5-9461-e8de2cce33c3` | Рестораны BA, тренды, premium сегмент    |
+| `pepino-supplier-dd`       | `220a67b5-6eee-48be-ab9f-8e2855b4a32b` | Due diligence поставщиков                |
+| `pepino-capex-investor`    | `1817e0d0-b51a-4814-a81e-24c73e28a64d` | Инвестиционные материалы, сценарии CAPEX |
+| `pepino-regulatory`        | `8a947923-cc04-4ee4-8d7b-56b11d5ac43e` | SENASA, ANMAT, законодательство          |
+| `pepino-agronomy-research` | `302edbe8-768a-4e13-afc1-31bbc0f9f82f` | Болезни, технологии, climate-control     |
+| `pepino-ai-architecture`   | `c02daa98-e103-4082-bca4-3af0db15b0b5` | AI архитектура, prompt docs, schemas     |
 
 **Когда использовать NotebookLM:**
 
@@ -283,7 +373,7 @@ pepino-investor-pack   → инвест-мемо, сценарии
 - Актуальные новости (NotebookLM не обновляется в реальном времени)
 - Простой вопрос без источников
 
-**Auth статус:** ⏳ Ожидает `storage_state.json` с Windows (см. NOTEBOOKLM_MCP_SPEC.md)
+**Auth статус:** ✅ Connected — cookies: `/home/roman/.notebooklm/storage_state.json`, auto-refresh: пон 08:50 (`/home/roman/refresh-notebooklm-cookies.sh`)
 
 ---
 
