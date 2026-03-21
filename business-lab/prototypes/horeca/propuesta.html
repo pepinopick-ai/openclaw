@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RestoBot — Propuesta de Automatizacion Inteligente</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1a1a1a;
+      background: #fff;
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 28px 32px 20px 32px;
+      font-size: 11.5px;
+      line-height: 1.45;
+    }
+
+    /* ---- HEADER ---- */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid #22c55e;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+    .header-logo {
+      font-size: 26px;
+      font-weight: 800;
+      color: #111;
+      letter-spacing: -0.5px;
+    }
+    .header-logo span { color: #22c55e; }
+    .header-subtitle {
+      font-size: 12px;
+      color: #555;
+      text-align: right;
+      max-width: 320px;
+      font-weight: 500;
+    }
+
+    /* ---- SECTIONS ---- */
+    .section { margin-bottom: 16px; }
+    .section-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #22c55e;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+      padding-bottom: 3px;
+      border-bottom: 1.5px solid #e5e7eb;
+    }
+    .section p {
+      color: #333;
+      font-size: 11.5px;
+    }
+
+    /* ---- MODULES GRID ---- */
+    .modules {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .module-card {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      background: #f9fafb;
+    }
+    .module-card .icon {
+      font-size: 18px;
+      display: inline-block;
+      margin-bottom: 2px;
+    }
+    .module-card h4 {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 2px;
+    }
+    .module-card p {
+      font-size: 10.5px;
+      color: #555;
+      line-height: 1.4;
+    }
+
+    /* ---- STEPS ---- */
+    .steps {
+      display: flex;
+      gap: 14px;
+      margin-top: 8px;
+    }
+    .step {
+      flex: 1;
+      text-align: center;
+      padding: 10px 8px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      background: #f9fafb;
+    }
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #22c55e;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .step h4 {
+      font-size: 11px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 2px;
+    }
+    .step p {
+      font-size: 10px;
+      color: #555;
+    }
+
+    /* ---- PRICING TABLE ---- */
+    .pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .pricing-table th {
+      background: #22c55e;
+      color: #fff;
+      font-weight: 700;
+      padding: 7px 10px;
+      text-align: left;
+      font-size: 11px;
+    }
+    .pricing-table th:first-child { border-radius: 5px 0 0 0; }
+    .pricing-table th:last-child  { border-radius: 0 5px 0 0; }
+    .pricing-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    .pricing-table tr:last-child td { border-bottom: none; }
+    .pricing-table tr:nth-child(even) td { background: #f9fafb; }
+    .plan-name {
+      font-weight: 700;
+      color: #111;
+    }
+    .plan-price {
+      font-weight: 700;
+      color: #22c55e;
+      white-space: nowrap;
+    }
+    .highlight-row td {
+      background: #ecfdf5 !important;
+      border: 2px solid #22c55e;
+    }
+    .offer {
+      text-align: center;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #ecfdf5;
+      border: 1.5px solid #22c55e;
+      border-radius: 6px;
+      font-weight: 700;
+      color: #15803d;
+      font-size: 12px;
+    }
+
+    /* ---- SUCCESS CASES ---- */
+    .cases-box {
+      margin-top: 8px;
+      padding: 10px 14px;
+      background: #f9fafb;
+      border-left: 4px solid #22c55e;
+      border-radius: 0 6px 6px 0;
+      font-style: italic;
+      color: #444;
+      font-size: 11.5px;
+    }
+
+    /* ---- FOOTER ---- */
+    .footer {
+      margin-top: 16px;
+      padding-top: 10px;
+      border-top: 2px solid #22c55e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: #777;
+    }
+    .footer-left { line-height: 1.6; }
+    .footer-left strong { color: #333; }
+    .footer-brand {
+      text-align: right;
+      font-weight: 600;
+      color: #22c55e;
+      font-size: 10.5px;
+    }
+
+    /* ---- PRINT ---- */
+    @media print {
+      body {
+        padding: 20px 24px 16px 24px;
+        max-width: none;
+        font-size: 11px;
+      }
+      .section { margin-bottom: 14px; }
+      .module-card, .step { break-inside: avoid; }
+      .footer { position: fixed; bottom: 0; left: 24px; right: 24px; }
+    }
+
+    @page {
+      size: A4;
+      margin: 12mm 10mm;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-logo">&#x1F916; Resto<span>Bot</span></div>
+    <div class="header-subtitle">Propuesta de Automatizaci&oacute;n Inteligente para Restaurantes</div>
+  </div>
+
+  <!-- SECTION 1: EL PROBLEMA -->
+  <div class="section">
+    <div class="section-title">El Problema</div>
+    <p>
+      El restaurante promedio en Argentina pierde entre el <strong>15% y 30%</strong> de sus insumos por falta de control.
+      Sin datos, es imposible saber cu&aacute;nto margen real tiene cada plato, cu&aacute;ndo se va a quedar sin stock,
+      o qu&eacute; productos se desperdician m&aacute;s.
+    </p>
+  </div>
+
+  <!-- SECTION 2: LA SOLUCION -->
+  <div class="section">
+    <div class="section-title">La Soluci&oacute;n &mdash; RestoBot</div>
+    <div class="modules">
+      <div class="module-card">
+        <div class="icon">&#x1F5D1;</div>
+        <h4>Control de Desperdicio</h4>
+        <p>Detect&aacute; qu&eacute; se tira y por qu&eacute;. Reduce p&eacute;rdidas 15-30%.</p>
+      </div>
+      <div class="module-card">
+        <div class="icon">&#x1F4CA;</div>
+        <h4>Calculador de Margen</h4>
+        <p>Conoc&eacute; el margen real de cada plato al centavo.</p>
+      </div>
+      <div class="module-card">
+        <div class="icon">&#x1F4C8;</div>
+        <h4>Predicci&oacute;n de Demanda</h4>
+        <p>Anticip&aacute; cu&aacute;nto vas a vender cada d&iacute;a de la semana.</p>
+      </div>
+      <div class="module-card">
+        <div class="icon">&#x1F6A8;</div>
+        <h4>Alertas Inteligentes</h4>
+        <p>Recib&iacute; avisos por Telegram antes de que ocurran problemas.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: COMO FUNCIONA -->
+  <div class="section">
+    <div class="section-title">C&oacute;mo Funciona</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h4>Conectamos tu operaci&oacute;n en 24 horas</h4>
+        <p>Configuraci&oacute;n inicial sin interrumpir tu servicio.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h4>RestoBot analiza tus datos con IA</h4>
+        <p>Procesamiento autom&aacute;tico continuo de tu informaci&oacute;n.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h4>Recib&iacute;s reportes e insights</h4>
+        <p>Directamente por Telegram o WhatsApp.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4: INVERSION -->
+  <div class="section">
+    <div class="section-title">Inversi&oacute;n</div>
+    <table class="pricing-table">
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>Precio</th>
+          <th>Incluye</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="plan-name">Starter</td>
+          <td class="plan-price">$15.000 ARS/mes</td>
+          <td>Desperdicio + Alertas</td>
+        </tr>
+        <tr class="highlight-row">
+          <td class="plan-name">Pro</td>
+          <td class="plan-price">$30.000 ARS/mes</td>
+          <td>Todo + Demanda + Margen + Reportes semanales</td>
+        </tr>
+        <tr>
+          <td class="plan-name">Enterprise</td>
+          <td class="plan-price">$60.000 ARS/mes</td>
+          <td>Todo + Multi-sucursal + API + Soporte prioritario</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="offer">Oferta de lanzamiento: primeros 30 d&iacute;as GRATIS, sin compromiso.</div>
+  </div>
+
+  <!-- SECTION 5: CASOS DE EXITO -->
+  <div class="section">
+    <div class="section-title">Casos de &Eacute;xito</div>
+    <div class="cases-box">
+      &laquo;M&aacute;s de 15 negocios gastron&oacute;micos en C&oacute;rdoba ya utilizan nuestra tecnolog&iacute;a de IA
+      para optimizar sus operaciones y reducir costos.&raquo;
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-left">
+      <strong>Contacto:</strong> Roman &nbsp;|&nbsp; WhatsApp: +54 9 351 XXXXXXX<br>
+      <strong>Web:</strong> vmi3105337.contaboserver.net/static/restobot/
+    </div>
+    <div class="footer-brand">
+      Tecnolog&iacute;a Pepino Pick &mdash; C&oacute;rdoba, Argentina
+    </div>
+  </div>
+
+</body>
+</html>
