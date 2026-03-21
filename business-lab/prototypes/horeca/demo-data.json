@@ -1,0 +1,127 @@
+{
+  "restaurant": {
+    "name": "El Patio de Cordoba",
+    "owner": "Carlos",
+    "phone": "+5493512345678",
+    "address": "Av. Colon 1234, Cordoba",
+    "plan": "pro",
+    "seats": 60,
+    "cuisine": "Cocina argentina contemporanea"
+  },
+  "menu": [
+    {
+      "dish": "Milanesa napolitana",
+      "price": 12500,
+      "cost": 4200,
+      "margin_pct": 66.4,
+      "category": "Platos principales"
+    },
+    {
+      "dish": "Bife de chorizo 400g",
+      "price": 18000,
+      "cost": 8500,
+      "margin_pct": 52.8,
+      "category": "Carnes"
+    },
+    {
+      "dish": "Ensalada Cesar",
+      "price": 8500,
+      "cost": 2100,
+      "margin_pct": 75.3,
+      "category": "Entradas"
+    },
+    {
+      "dish": "Ravioles de ricota",
+      "price": 10000,
+      "cost": 3200,
+      "margin_pct": 68.0,
+      "category": "Pastas"
+    },
+    {
+      "dish": "Lomo al champignon",
+      "price": 22000,
+      "cost": 11000,
+      "margin_pct": 50.0,
+      "category": "Carnes"
+    },
+    {
+      "dish": "Empanadas (x3)",
+      "price": 6000,
+      "cost": 1500,
+      "margin_pct": 75.0,
+      "category": "Entradas"
+    },
+    {
+      "dish": "Flan casero",
+      "price": 5500,
+      "cost": 800,
+      "margin_pct": 85.5,
+      "category": "Postres"
+    },
+    { "dish": "Tiramisu", "price": 7000, "cost": 2800, "margin_pct": 60.0, "category": "Postres" },
+    {
+      "dish": "Provoleta",
+      "price": 7500,
+      "cost": 3500,
+      "margin_pct": 53.3,
+      "category": "Entradas"
+    },
+    {
+      "dish": "Sorrentinos",
+      "price": 11000,
+      "cost": 3800,
+      "margin_pct": 65.5,
+      "category": "Pastas"
+    },
+    {
+      "dish": "Hamburguesa gourmet",
+      "price": 9500,
+      "cost": 3000,
+      "margin_pct": 68.4,
+      "category": "Platos principales"
+    },
+    {
+      "dish": "Tabla de fiambres",
+      "price": 14000,
+      "cost": 6500,
+      "margin_pct": 53.6,
+      "category": "Entradas"
+    }
+  ],
+  "weekly_sales": {
+    "monday": { "revenue": 185000, "covers": 45, "top_dish": "Milanesa napolitana" },
+    "tuesday": { "revenue": 165000, "covers": 38, "top_dish": "Ravioles de ricota" },
+    "wednesday": { "revenue": 210000, "covers": 52, "top_dish": "Bife de chorizo" },
+    "thursday": { "revenue": 195000, "covers": 48, "top_dish": "Milanesa napolitana" },
+    "friday": { "revenue": 320000, "covers": 75, "top_dish": "Lomo al champignon" },
+    "saturday": { "revenue": 380000, "covers": 88, "top_dish": "Bife de chorizo" },
+    "sunday": { "revenue": 280000, "covers": 65, "top_dish": "Sorrentinos" }
+  },
+  "waste_report": {
+    "total_waste_pct": 14.2,
+    "worst_items": [
+      { "item": "Lechuga", "waste_kg": 8.5, "value_ars": 12750, "cause": "Sobrecompra" },
+      { "item": "Pan de hamburguesa", "waste_kg": 3.2, "value_ars": 6400, "cause": "Caducidad" },
+      { "item": "Crema de leche", "waste_litres": 4, "value_ars": 8000, "cause": "Sin rotacion" }
+    ],
+    "monthly_waste_value": 108600,
+    "recommendation": "Reducir pedido de lechuga 30% y rotar crema con tiramisu"
+  },
+  "alerts": [
+    {
+      "type": "margin",
+      "message": "Lomo al champignon tiene margen 50% -- debajo del minimo 55%",
+      "action": "Subir precio a $24.000 o reducir porcion de champignones"
+    },
+    {
+      "type": "waste",
+      "message": "Lechuga: 8.5kg desperdiciados esta semana ($12.750)",
+      "action": "Reducir pedido semanal de 25kg a 18kg"
+    },
+    {
+      "type": "demand",
+      "message": "Milanesa napolitana: demanda subio 23% -- preparar mas",
+      "action": "Aumentar prep diaria de 15 a 20 porciones"
+    }
+  ]
+}
