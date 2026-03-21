@@ -582,6 +582,7 @@ ${c(C.cyan, "System:")}
   ${c(C.bold, "cron")}                List cron jobs with last run time
   ${c(C.bold, "logs")} [script]       Tail last 20 lines of script log
   ${c(C.bold, "index")}               Knowledge indexer stats
+  ${c(C.bold, "n8n")} [list|status]    n8n workflow overview
   ${c(C.bold, "help")}                Show this help
 
 ${c(C.dim, "Alias: alias pepino='node /home/roman/openclaw/skills/pepino-google-sheets/pepino-cli.cjs'")}
@@ -667,6 +668,17 @@ async function main() {
       break;
     case "index":
       cmdIndex();
+      break;
+    case "n8n":
+      try {
+        const out = execSync(
+          "node " + path.join(__dirname, "n8n-client.cjs") + " " + (rest[0] || "status"),
+          { encoding: "utf8", timeout: 15000 },
+        );
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.message);
+      }
       break;
 
     case "help":
