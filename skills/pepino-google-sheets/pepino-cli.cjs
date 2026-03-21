@@ -583,6 +583,7 @@ ${c(C.cyan, "System:")}
   ${c(C.bold, "logs")} [script]       Tail last 20 lines of script log
   ${c(C.bold, "index")}               Knowledge indexer stats
   ${c(C.bold, "twin")} [html]          Digital Twin farm state model
+  ${c(C.bold, "crypto")} [prices|dca|risk|portfolio|report]  Crypto portfolio
   ${c(C.bold, "eval")} [seed|report]   Langfuse eval system
   ${c(C.bold, "n8n")} [list|status]    n8n workflow overview
   ${c(C.bold, "help")}                Show this help
@@ -670,6 +671,23 @@ async function main() {
       break;
     case "index":
       cmdIndex();
+      break;
+    case "crypto":
+      try {
+        const sub = rest[0] || "prices";
+        const out = execSync(
+          "node " +
+            path.join(__dirname, "crypto-portfolio.cjs") +
+            " " +
+            sub +
+            " " +
+            rest.slice(1).join(" "),
+          { encoding: "utf8", timeout: 15000 },
+        );
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.message);
+      }
       break;
     case "eval":
       try {
