@@ -113,17 +113,38 @@ async function safeFetch(url, fallback = null) {
 }
 
 async function gatherData() {
+  // Пытаемся загрузить кеш farm-state (TTL=15 мин, обновляется по cron)
+  /** @type {object|null} */
+  let farmState = null;
+  try {
+    const { getState } = await import("./farm-state.cjs");
+    farmState = await getState();
+    console.log("[farm-state] Кеш загружен, refreshed_at:", farmState.refreshed_at);
+  } catch (err) {
+    console.error(`[WARN] farm-state недоступен, fallback на API: ${err.message}`);
+  }
+
+  // Если кеш есть — берём данные из него, иначе fallback на API
   const [production, sales, gaps, alerts, inventory, weather, alertsSummary] = await Promise.all([
-    safeFetch(`${API_BASE}/production`, []),
-    safeFetch(`${API_BASE}/sales`, []),
-    safeFetch(`${API_BASE}/gaps`, []),
-    safeFetch(`${API_BASE}/alerts`, []),
-    safeFetch(`${API_BASE}/inventory`, []),
+    farmState?.production ?? safeFetch(`${API_BASE}/production`, []),
+    farmState?.sales ?? safeFetch(`${API_BASE}/sales`, []),
+    safeFetch(`${API_BASE}/gaps`, []), // gaps нет в farm-state, всегда через API
+    farmState?.alerts ?? safeFetch(`${API_BASE}/alerts`, []),
+    farmState?.inventory ?? safeFetch(`${API_BASE}/inventory`, []),
     safeFetch(WEATHER_URL, null),
-    fetchAlertsSummary(),
+    fetchAlertsSummary(farmState),
   ]);
 
-  return { production, sales, gaps, alerts, inventory, weather, alertsSummary };
+  return {
+    production,
+    sales,
+    gaps,
+    alerts,
+    inventory,
+    weather,
+    alertsSummary,
+    _dataSource: farmState ? "farm-state-cache" : "sheets-api",
+  };
 }
 
 // ── Парсинг данных ───────────────────────────────────────────────────────────
@@ -261,30 +282,42 @@ const ALERT_HEADERS = [
 ];
 
 /**
- * Читает лист "⚠️ Алерты" напрямую из Google Sheets,
+ * Читает алерты из farm-state кеша или напрямую из Google Sheets,
  * фильтрует за последние 24ч, группирует нерешённые по категории.
+ * @param {object|null} [farmState] — кеш farm-state.cjs (если доступен)
  * @returns {{ recent: object[], unresolvedByCategory: Record<string, number>, totalUnresolved: number }}
  */
-async function fetchAlertsSummary() {
+async function fetchAlertsSummary(farmState = null) {
   try {
-    const rows = await readSheet(
-      PEPINO_SHEETS_ID,
-      "\u26A0\uFE0F \u0410\u043B\u0435\u0440\u0442\u044B",
-    );
-    if (!rows || rows.length < 2) {
-      return { recent: [], unresolvedByCategory: {}, totalUnresolved: 0 };
-    }
+    /** @type {Record<string, string>[]} */
+    let alerts;
 
-    // Первая строка — заголовки, остальные — данные
-    const headers = rows[0];
-    const alerts = rows.slice(1).map((row) => {
-      /** @type {Record<string, string>} */
-      const obj = {};
-      headers.forEach((h, i) => {
-        obj[h.toLowerCase().trim()] = (row[i] || "").trim();
+    if (farmState?.alerts && Array.isArray(farmState.alerts) && farmState.alerts.length > 0) {
+      // Кеш farm-state уже содержит алерты как массив объектов
+      console.log(`[farm-state] Алерты из кеша: ${farmState.alerts.length} записей`);
+      alerts = farmState.alerts;
+    } else {
+      // Fallback: прямое чтение из Google Sheets
+      console.log("[farm-state] Алерты: fallback на readSheet");
+      const rows = await readSheet(
+        PEPINO_SHEETS_ID,
+        "\u26A0\uFE0F \u0410\u043B\u0435\u0440\u0442\u044B",
+      );
+      if (!rows || rows.length < 2) {
+        return { recent: [], unresolvedByCategory: {}, totalUnresolved: 0 };
+      }
+
+      // Первая строка — заголовки, остальные — данные
+      const headers = rows[0];
+      alerts = rows.slice(1).map((row) => {
+        /** @type {Record<string, string>} */
+        const obj = {};
+        headers.forEach((h, i) => {
+          obj[h.toLowerCase().trim()] = (row[i] || "").trim();
+        });
+        return obj;
       });
-      return obj;
-    });
+    }
 
     // Дата 24 часа назад (аргентинский TZ)
     const nowLocal = new Date(new Date().toLocaleString("en-US", { timeZone: TZ }));
@@ -479,7 +512,11 @@ async function main() {
       input: { date: new Date().toISOString().slice(0, 10) },
       output: { brief_length: brief.length, message_id: result.result?.message_id },
       duration_ms: Date.now() - startMs,
-      metadata: { skill: "pepino-google-sheets", cron: "morning-briefing" },
+      metadata: {
+        skill: "pepino-google-sheets",
+        cron: "morning-briefing",
+        data_source: data._dataSource || "unknown",
+      },
     }).catch(() => {}); // never fail on trace error
   } catch (err) {
     console.error(`[ERROR] Не удалось отправить бриф: ${err.message}`);

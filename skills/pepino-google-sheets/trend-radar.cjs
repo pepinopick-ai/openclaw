@@ -644,7 +644,24 @@ async function main() {
   const streamArg = args[0] || "all";
 
   const validStreams = Object.keys(RADARS);
-  const streamsToRun = streamArg === "all" ? validStreams : [streamArg];
+
+  // "auto" mode: pick streams based on day of week
+  let streamsToRun;
+  if (streamArg === "auto") {
+    const dow = new Date().getDay(); // 0=Sun, 1=Mon, ...
+    const schedule = {
+      0: ["supplier-risk"], // Sunday
+      1: ["supplier-risk", "ai-agents", "marketing", "sales"], // Monday
+      2: ["supplier-risk", "agro-tech"], // Tuesday
+      3: ["supplier-risk", "ai-agents", "marketing"], // Wednesday
+      4: ["supplier-risk", "agro-tech", "sales"], // Thursday
+      5: ["supplier-risk", "ai-agents", "marketing"], // Friday
+      6: ["supplier-risk"], // Saturday
+    };
+    streamsToRun = schedule[dow] || ["supplier-risk"];
+  } else {
+    streamsToRun = streamArg === "all" ? validStreams : [streamArg];
+  }
 
   // Валидация аргументов
   for (const s of streamsToRun) {

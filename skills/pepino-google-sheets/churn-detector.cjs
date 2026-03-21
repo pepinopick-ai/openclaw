@@ -2,11 +2,10 @@
 /**
  * Pepino Pick — Churn Detection & Client Health Monitor
  *
- * Анализирует историю продаж, выявляет:
- *   1. Клиентов, которые не заказывали >14 дней (at risk)
- *   2. Клиентов, которые не заказывали >30 дней (churned)
- *   3. Снижение частоты заказов (frequency drop)
- *   4. Снижение среднего чека (basket drop)
+ * Использует shared модуль client-analytics.cjs для анализа клиентов.
+ * Выявляет:
+ *   1. Клиентов со статусом "churned" (>30 дней без заказа)
+ *   2. Клиентов со статусом "at_risk" (>14 дней без заказа)
  *
  * Отправляет алерты в Telegram и записывает в Sheets (⚠️ Алерты)
  *
@@ -19,8 +18,8 @@
 const http = require("http");
 const { apiHeaders } = require("./api-auth.cjs");
 const { trace } = require("./langfuse-trace.cjs");
-const { normalize } = require("./product-aliases.cjs");
 const { send } = require("./telegram-helper.cjs");
+const { analyzeClients } = require("./client-analytics.cjs");
 
 // Throttled sender с fallback на прямую отправку
 let sendThrottled;
@@ -36,34 +35,7 @@ const TG_THREAD_ID = 20; // Стратегия/Директор
 const DRY_RUN = process.argv.includes("--dry-run");
 const SEND_TG = process.argv.includes("--telegram") || !DRY_RUN;
 
-// ── Thresholds ──────────────────────────────────────────────────────────────
-
-const DAYS_AT_RISK = 14; // >14 дней без заказа = at risk
-const DAYS_CHURNED = 30; // >30 дней = churned
-const FREQ_DROP_PCT = 30; // снижение частоты >30% = alert
-const BASKET_DROP_PCT = 25; // снижение среднего чека >25% = alert
-const MIN_ORDERS_FOR_ANALYSIS = 3; // минимум заказов для анализа трендов
-
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
-
-function fetchJson(path) {
-  return new Promise((resolve, reject) => {
-    const url = `${API_BASE}${path}`;
-    http
-      .get(url, { headers: apiHeaders() }, (res) => {
-        let data = "";
-        res.on("data", (c) => (data += c));
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch {
-            reject(new Error(`Parse error from ${path}`));
-          }
-        });
-      })
-      .on("error", reject);
-  });
-}
 
 function postJson(path, body) {
   return new Promise((resolve, reject) => {
@@ -99,179 +71,41 @@ function postJson(path, body) {
   });
 }
 
-// ── Analysis ─────────────────────────────────────────────────────────────────
-
-function daysBetween(d1, d2) {
-  return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
-}
-
-function analyzeClients(sales) {
-  const now = new Date();
-  const clients = {};
-
-  // Group sales by client
-  for (const sale of sales) {
-    const client = sale["Клиент"] || sale["клиент"] || sale["client"] || "";
-    if (!client || client === "Тест" || client === "test") continue;
-
-    const dateStr = sale["Дата"] || sale["дата"] || sale["date"] || "";
-    if (!dateStr) continue;
-
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) continue;
-
-    const total =
-      parseFloat(
-        sale["Итого ARS"] ||
-          sale["Сумма ARS"] ||
-          sale["Сумма"] ||
-          sale["total_ars"] ||
-          sale["Total"] ||
-          0,
-      ) || 0;
-    const qty =
-      parseFloat(
-        sale["Кол-во кг"] || sale["Кол-во"] || sale["qty_kg"] || sale["Количество"] || 0,
-      ) || 0;
-
-    if (!clients[client]) {
-      clients[client] = { name: client, orders: [], totalRevenue: 0, totalQty: 0 };
-    }
-    clients[client].orders.push({ date, total, qty });
-    clients[client].totalRevenue += total;
-    clients[client].totalQty += qty;
-  }
-
-  const results = { atRisk: [], churned: [], freqDrop: [], basketDrop: [], healthy: [] };
-
-  for (const [name, data] of Object.entries(clients)) {
-    // Sort orders by date
-    data.orders.sort((a, b) => a.date - b.date);
-
-    const lastOrder = data.orders[data.orders.length - 1];
-    const daysSinceLast = daysBetween(lastOrder.date, now);
-    const orderCount = data.orders.length;
-    const avgBasket = data.totalRevenue / orderCount;
-
-    const clientSummary = {
-      name,
-      lastOrder: lastOrder.date.toISOString().slice(0, 10),
-      daysSinceLast,
-      orderCount,
-      totalRevenue: Math.round(data.totalRevenue),
-      avgBasket: Math.round(avgBasket),
-    };
-
-    // Churn detection
-    if (daysSinceLast > DAYS_CHURNED) {
-      clientSummary.status = "CHURNED";
-      results.churned.push(clientSummary);
-    } else if (daysSinceLast > DAYS_AT_RISK) {
-      clientSummary.status = "AT_RISK";
-      results.atRisk.push(clientSummary);
-    } else {
-      clientSummary.status = "HEALTHY";
-      results.healthy.push(clientSummary);
-    }
-
-    // Frequency analysis (need 3+ orders)
-    if (orderCount >= MIN_ORDERS_FOR_ANALYSIS) {
-      // Compare avg gap of last 3 orders vs previous
-      const gaps = [];
-      for (let i = 1; i < data.orders.length; i++) {
-        gaps.push(daysBetween(data.orders[i - 1].date, data.orders[i].date));
-      }
-
-      if (gaps.length >= 3) {
-        const recentGaps = gaps.slice(-2);
-        const olderGaps = gaps.slice(0, -2);
-        const avgRecent = recentGaps.reduce((a, b) => a + b, 0) / recentGaps.length;
-        const avgOlder = olderGaps.reduce((a, b) => a + b, 0) / olderGaps.length;
-
-        if (avgOlder > 0 && avgRecent > avgOlder * (1 + FREQ_DROP_PCT / 100)) {
-          clientSummary.freqDropPct = Math.round((avgRecent / avgOlder - 1) * 100);
-          clientSummary.avgGapRecent = Math.round(avgRecent);
-          clientSummary.avgGapOlder = Math.round(avgOlder);
-          results.freqDrop.push(clientSummary);
-        }
-      }
-
-      // Basket analysis
-      if (orderCount >= 4) {
-        const recentBaskets = data.orders.slice(-2).map((o) => o.total);
-        const olderBaskets = data.orders.slice(0, -2).map((o) => o.total);
-        const avgRecentBasket = recentBaskets.reduce((a, b) => a + b, 0) / recentBaskets.length;
-        const avgOlderBasket = olderBaskets.reduce((a, b) => a + b, 0) / olderBaskets.length;
-
-        if (avgOlderBasket > 0 && avgRecentBasket < avgOlderBasket * (1 - BASKET_DROP_PCT / 100)) {
-          clientSummary.basketDropPct = Math.round((1 - avgRecentBasket / avgOlderBasket) * 100);
-          results.basketDrop.push(clientSummary);
-        }
-      }
-    }
-  }
-
-  // Sort by revenue (most valuable at risk first)
-  results.atRisk.sort((a, b) => b.totalRevenue - a.totalRevenue);
-  results.churned.sort((a, b) => b.totalRevenue - a.totalRevenue);
-  results.freqDrop.sort((a, b) => b.totalRevenue - a.totalRevenue);
-
-  return results;
-}
-
 // ── Formatting ───────────────────────────────────────────────────────────────
 
-function formatReport(results) {
+function formatReport(churned, atRisk, summary) {
   const lines = [];
   const d = new Date().toISOString().slice(0, 10);
   lines.push(`<b>📊 Churn Report — ${d}</b>\n`);
 
-  if (results.churned.length > 0) {
-    lines.push(`<b>🔴 CHURNED (>${DAYS_CHURNED}д без заказа):</b>`);
-    for (const c of results.churned.slice(0, 5)) {
+  if (churned.length > 0) {
+    lines.push(`<b>🔴 CHURNED (>30д без заказа):</b>`);
+    for (const c of churned.slice(0, 5)) {
       lines.push(
-        `  • <b>${c.name}</b> — ${c.daysSinceLast}д, ${c.orderCount} заказов, ${c.totalRevenue.toLocaleString()} ARS`,
+        `  • <b>${c.name}</b> — ${c.daysSinceLast}д, ${c.orderCount} заказов, ${Math.round(c.totalArs).toLocaleString()} ARS`,
       );
     }
     lines.push("");
   }
 
-  if (results.atRisk.length > 0) {
-    lines.push(`<b>🟡 AT RISK (>${DAYS_AT_RISK}д без заказа):</b>`);
-    for (const c of results.atRisk.slice(0, 5)) {
+  if (atRisk.length > 0) {
+    lines.push(`<b>🟡 AT RISK (>14д без заказа):</b>`);
+    for (const c of atRisk.slice(0, 5)) {
       lines.push(
-        `  • <b>${c.name}</b> — ${c.daysSinceLast}д, посл. ${c.lastOrder}, ср. чек ${c.avgBasket.toLocaleString()} ARS`,
+        `  • <b>${c.name}</b> — ${c.daysSinceLast}д, посл. ${c.lastOrder}, ср. чек ${c.avgOrderArs.toLocaleString()} ARS`,
       );
     }
     lines.push("");
   }
 
-  if (results.freqDrop.length > 0) {
-    lines.push(`<b>📉 Частота заказов падает:</b>`);
-    for (const c of results.freqDrop.slice(0, 3)) {
-      lines.push(
-        `  • <b>${c.name}</b> — gap ${c.avgGapOlder}д→${c.avgGapRecent}д (+${c.freqDropPct}%)`,
-      );
-    }
-    lines.push("");
-  }
-
-  if (results.basketDrop.length > 0) {
-    lines.push(`<b>📉 Средний чек падает:</b>`);
-    for (const c of results.basketDrop.slice(0, 3)) {
-      lines.push(`  • <b>${c.name}</b> — чек упал на ${c.basketDropPct}%`);
-    }
-    lines.push("");
-  }
-
-  const total = results.churned.length + results.atRisk.length;
+  const total = churned.length + atRisk.length;
   if (total === 0) {
     lines.push("✅ Все клиенты активны. Нет риска оттока.");
   } else {
-    const atRiskRevenue = results.atRisk.reduce((s, c) => s + c.totalRevenue, 0);
-    const churnedRevenue = results.churned.reduce((s, c) => s + c.totalRevenue, 0);
+    const atRiskRevenue = atRisk.reduce((s, c) => s + c.totalArs, 0);
+    const churnedRevenue = churned.reduce((s, c) => s + c.totalArs, 0);
     lines.push(
-      `<b>💰 Под угрозой:</b> ${(atRiskRevenue + churnedRevenue).toLocaleString()} ARS выручки`,
+      `<b>💰 Под угрозой:</b> ${Math.round(atRiskRevenue + churnedRevenue).toLocaleString()} ARS выручки`,
     );
     lines.push(`\n<b>Рекомендация:</b> Написать at-risk клиентам сегодня.`);
   }
@@ -285,52 +119,32 @@ async function main() {
   const startMs = Date.now();
   console.log(`[${new Date().toISOString()}] Churn detector starting...`);
 
-  // Fetch ALL sales (not just last 20)
-  let sales;
-  try {
-    const { readSheet, PEPINO_SHEETS_ID } = require("./sheets.js");
-    // Direct sheet read to get ALL rows, not just last 20 from API
-    const rows = await readSheet(PEPINO_SHEETS_ID, "🛒 Продажи");
-    if (!rows || rows.length < 2) {
-      console.log("No sales data found.");
-      return;
-    }
-    const headers = rows[0];
-    sales = rows.slice(1).map((row) => {
-      const obj = {};
-      headers.forEach((h, i) => {
-        obj[h] = row[i] || "";
-      });
-      return obj;
-    });
-  } catch (err) {
-    // Fallback: try API
-    console.log("Direct sheet read failed, trying API...");
-    sales = await fetchJson("/sales");
-  }
+  // analyzeClients() сам читает данные из farm-state или Sheets
+  const { clients, summary } = await analyzeClients();
 
-  console.log(`Loaded ${sales.length} sales records`);
+  // Фильтрация по статусу (уже отсортированы по totalArs в shared модуле)
+  const churned = clients.filter((c) => c.status === "churned");
+  const atRisk = clients.filter((c) => c.status === "at_risk");
+  const active = clients.filter((c) => c.status === "active" || c.status === "new");
 
-  const results = analyzeClients(sales);
+  console.log(`Total clients: ${summary.total}`);
+  console.log(`Churned: ${churned.length}`);
+  console.log(`At risk: ${atRisk.length}`);
+  console.log(`Active: ${active.length}`);
 
-  console.log(`Churned: ${results.churned.length}`);
-  console.log(`At risk: ${results.atRisk.length}`);
-  console.log(`Freq drop: ${results.freqDrop.length}`);
-  console.log(`Basket drop: ${results.basketDrop.length}`);
-  console.log(`Healthy: ${results.healthy.length}`);
-
-  const report = formatReport(results);
+  const report = formatReport(churned, atRisk, summary);
   console.log("\n" + report.replace(/<[^>]+>/g, "") + "\n");
 
   // Write alerts to Sheets
-  if (!DRY_RUN && (results.atRisk.length > 0 || results.churned.length > 0)) {
-    for (const c of [...results.churned.slice(0, 3), ...results.atRisk.slice(0, 3)]) {
+  if (!DRY_RUN && (atRisk.length > 0 || churned.length > 0)) {
+    for (const c of [...churned.slice(0, 3), ...atRisk.slice(0, 3)]) {
+      const statusLabel = c.status === "churned" ? "CHURNED" : "AT_RISK";
       try {
         await postJson("/log/alert", {
           type: "churn",
           zone: "CRM",
-          description: `${c.status}: ${c.name} — ${c.daysSinceLast} дней без заказа, выручка ${c.totalRevenue.toLocaleString()} ARS`,
-          severity: c.status === "CHURNED" ? "4" : "3",
+          description: `${statusLabel}: ${c.name} — ${c.daysSinceLast} дней без заказа, выручка ${Math.round(c.totalArs).toLocaleString()} ARS`,
+          severity: c.status === "churned" ? "4" : "3",
           source: "churn-detector",
         });
       } catch (err) {
@@ -340,7 +154,7 @@ async function main() {
   }
 
   // Send Telegram
-  if (SEND_TG && (results.atRisk.length > 0 || results.churned.length > 0)) {
+  if (SEND_TG && (atRisk.length > 0 || churned.length > 0)) {
     try {
       if (sendThrottled) {
         await sendThrottled(report, {
@@ -365,13 +179,12 @@ async function main() {
   // Langfuse trace
   await trace({
     name: "churn-detector",
-    input: { sales_count: sales.length },
+    input: { total_clients: summary.total },
     output: {
-      churned: results.churned.length,
-      at_risk: results.atRisk.length,
-      freq_drop: results.freqDrop.length,
-      basket_drop: results.basketDrop.length,
-      healthy: results.healthy.length,
+      churned: churned.length,
+      at_risk: atRisk.length,
+      active: active.length,
+      avg_rfm_score: summary.avgScore,
     },
     duration_ms: Date.now() - startMs,
     metadata: { skill: "pepino-google-sheets", cron: "churn-detector" },
