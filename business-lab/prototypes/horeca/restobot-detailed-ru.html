@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RestoBot — Искусственный интеллект для вашего ресторана</title>
+<style>
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    width: 210mm;
+    margin: 0 auto;
+    background: #0a0a0a;
+    color: #e4e4e7;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+
+  .page {
+    width: 100%;
+    min-height: 257mm;
+    padding: 12mm 8mm;
+    page-break-after: always;
+    position: relative;
+  }
+
+  .page:last-child {
+    page-break-after: auto;
+  }
+
+  /* ── Typography ── */
+  h1 {
+    font-size: 32pt;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.5px;
+  }
+
+  h2 {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 6mm;
+    padding-bottom: 3mm;
+    border-bottom: 2px solid #22c55e;
+    display: inline-block;
+  }
+
+  h3 {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #22c55e;
+    margin-bottom: 3mm;
+  }
+
+  h4 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 2mm;
+  }
+
+  p {
+    margin-bottom: 3mm;
+    color: #d4d4d8;
+  }
+
+  .green { color: #22c55e; }
+  .white { color: #ffffff; }
+  .muted { color: #71717a; }
+  .red   { color: #ef4444; }
+
+  .text-center { text-align: center; }
+  .text-right  { text-align: right; }
+
+  /* ── Layout helpers ── */
+  .flex {
+    display: flex;
+    gap: 5mm;
+  }
+
+  .flex-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5mm;
+  }
+
+  .flex-1 { flex: 1; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5mm;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: #111111;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    padding: 6mm;
+  }
+
+  .card-green {
+    background: #111111;
+    border: 1px solid #22c55e;
+    border-radius: 8px;
+    padding: 6mm;
+  }
+
+  .card-highlight {
+    background: linear-gradient(135deg, #0a1a0f 0%, #111111 100%);
+    border: 2px solid #22c55e;
+    border-radius: 8px;
+    padding: 6mm;
+  }
+
+  /* ── Icon circles ── */
+  .icon-lg {
+    font-size: 28pt;
+    display: block;
+    margin-bottom: 3mm;
+  }
+
+  .icon-md {
+    font-size: 18pt;
+    margin-right: 2mm;
+  }
+
+  /* ── Stat boxes ── */
+  .stat-value {
+    font-size: 26pt;
+    font-weight: 800;
+    color: #22c55e;
+    line-height: 1.1;
+  }
+
+  .stat-label {
+    font-size: 9pt;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Tags / badges ── */
+  .badge {
+    display: inline-block;
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    padding: 1mm 3mm;
+    border-radius: 4px;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-red {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+
+  th {
+    background: #18181b;
+    color: #22c55e;
+    padding: 3mm 2mm;
+    text-align: left;
+    font-weight: 700;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid #22c55e;
+  }
+
+  td {
+    padding: 2.5mm 2mm;
+    border-bottom: 1px solid #27272a;
+    color: #d4d4d8;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* ── WhatsApp mockup ── */
+  .wa-bubble {
+    background: #1a2e1a;
+    border-radius: 0 10px 10px 10px;
+    padding: 5mm;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.6;
+    color: #e4e4e7;
+    max-width: 85%;
+    position: relative;
+    border: 1px solid #2d4a2d;
+  }
+
+  .wa-bubble::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -6px;
+    width: 0;
+    height: 0;
+    border-top: 8px solid #1a2e1a;
+    border-left: 8px solid transparent;
+  }
+
+  .wa-time {
+    text-align: right;
+    font-size: 7.5pt;
+    color: #71717a;
+    margin-top: 2mm;
+  }
+
+  .wa-header {
+    background: #075e54;
+    border-radius: 8px 8px 0 0;
+    padding: 3mm 4mm;
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+  }
+
+  .wa-avatar {
+    width: 10mm;
+    height: 10mm;
+    background: #22c55e;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14pt;
+  }
+
+  .wa-name {
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 10pt;
+  }
+
+  .wa-body {
+    background: #0b141a;
+    border-radius: 0 0 8px 8px;
+    padding: 5mm;
+  }
+
+  /* ── Steps ── */
+  .step-num {
+    font-size: 36pt;
+    font-weight: 800;
+    color: #22c55e;
+    line-height: 1;
+    margin-bottom: 2mm;
+  }
+
+  /* ── Dividers ── */
+  .divider {
+    height: 1px;
+    background: #27272a;
+    margin: 5mm 0;
+  }
+
+  .divider-green {
+    height: 2px;
+    background: linear-gradient(90deg, #22c55e, transparent);
+    margin: 5mm 0;
+  }
+
+  /* ── Quote ── */
+  .quote {
+    border-left: 3px solid #22c55e;
+    padding: 3mm 5mm;
+    font-style: italic;
+    color: #a1a1aa;
+    font-size: 12pt;
+    margin: 5mm 0;
+  }
+
+  /* ── CTA box ── */
+  .cta-box {
+    background: linear-gradient(135deg, #0a1a0f 0%, #0f1f14 100%);
+    border: 2px solid #22c55e;
+    border-radius: 10px;
+    padding: 6mm 8mm;
+    text-align: center;
+  }
+
+  .cta-box h3 {
+    font-size: 16pt;
+    margin-bottom: 2mm;
+  }
+
+  /* ── Footer ── */
+  .page-footer {
+    position: absolute;
+    bottom: 8mm;
+    left: 8mm;
+    right: 8mm;
+    font-size: 7.5pt;
+    color: #52525b;
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid #27272a;
+    padding-top: 2mm;
+  }
+
+  /* ── Pricing popular ── */
+  .plan-popular {
+    border-color: #22c55e;
+    border-width: 2px;
+    position: relative;
+  }
+
+  .plan-popular-tag {
+    position: absolute;
+    top: -3mm;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #22c55e;
+    color: #0a0a0a;
+    padding: 0.5mm 4mm;
+    border-radius: 4px;
+    font-size: 7pt;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Flow diagram ── */
+  .flow-step {
+    text-align: center;
+    flex: 1;
+  }
+
+  .flow-icon {
+    font-size: 24pt;
+    display: block;
+    margin-bottom: 2mm;
+  }
+
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #22c55e;
+    font-size: 18pt;
+    padding: 0 1mm;
+  }
+
+  /* ── Utility ── */
+  .mt-2 { margin-top: 2mm; }
+  .mt-4 { margin-top: 4mm; }
+  .mt-6 { margin-top: 6mm; }
+  .mt-8 { margin-top: 8mm; }
+  .mb-2 { margin-bottom: 2mm; }
+  .mb-4 { margin-bottom: 4mm; }
+  .mb-6 { margin-bottom: 6mm; }
+
+  .check { color: #22c55e; }
+  .cross { color: #52525b; }
+
+  @media print {
+    body {
+      width: 210mm;
+    }
+    .page {
+      min-height: auto;
+      height: 257mm;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 1 — ОБЛОЖКА
+     ═══════════════════════════════════════════════════ -->
+<div class="page" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+
+    <div style="font-size:64pt; margin-bottom:6mm;">&#x1F916;</div>
+
+    <h1 style="font-size:42pt; margin-bottom:4mm;">RestoBot</h1>
+
+    <p style="font-size:16pt; color:#22c55e; font-weight:600; margin-bottom:8mm; letter-spacing:0.3px;">
+      Искусственный интеллект для вашего ресторана
+    </p>
+
+    <div class="divider-green" style="width:60mm; margin:4mm auto;"></div>
+
+    <p style="font-size:13pt; color:#a1a1aa; margin-top:6mm; max-width:140mm; line-height:1.6;">
+      Сократите потери. Увеличьте маржу.<br>Автоматизируйте решения.
+    </p>
+
+    <div style="margin-top:16mm;">
+      <span class="badge" style="font-size:9pt; padding:2mm 5mm;">v1.0 &nbsp;|&nbsp; Март 2026</span>
+    </div>
+
+    <p style="margin-top:8mm; font-size:9pt; color:#71717a;">info@restobot.com.ar</p>
+  </div>
+
+  <div class="page-footer">
+    <span>RestoBot v1.0 — Конфиденциально</span>
+    <span>1 / 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 2 — ПРОБЛЕМА
+     ═══════════════════════════════════════════════════ -->
+<div class="page">
+  <h2>Проблема</h2>
+
+  <p class="mt-4" style="font-size:11pt; color:#a1a1aa; margin-bottom:8mm;">
+    Аргентинская гастрономия сталкивается с критическими проблемами, которые напрямую влияют на рентабельность.
+    Большинство ресторанов работает без данных, без оповещений и без реального понимания своих показателей.
+  </p>
+
+  <div class="flex-col" style="gap:6mm;">
+
+    <!-- Pain 1 -->
+    <div class="card" style="display:flex; gap:5mm; align-items:flex-start;">
+      <div style="flex-shrink:0;">
+        <div style="width:16mm; height:16mm; background:rgba(239,68,68,0.12); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:22pt;">
+          &#x1F5D1;
+        </div>
+      </div>
+      <div style="flex:1;">
+        <h3 style="color:#ef4444;">Потери: тихое кровотечение</h3>
+        <p style="font-size:10.5pt;">
+          Аргентинские рестораны теряют от <strong class="white">12% до 18%</strong> закупок на списания.
+          Для среднего ресторана это эквивалентно <strong class="red">$150.000 - $500.000 в месяц</strong>, выброшенных на помойку.
+        </p>
+        <div class="mt-2">
+          <span class="badge badge-red">Ущерб: $1.8M - $6M / год</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pain 2 -->
+    <div class="card" style="display:flex; gap:5mm; align-items:flex-start;">
+      <div style="flex-shrink:0;">
+        <div style="width:16mm; height:16mm; background:rgba(239,68,68,0.12); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:22pt;">
+          &#x1F4C9;
+        </div>
+      </div>
+      <div style="flex:1;">
+        <h3 style="color:#ef4444;">Слепая маржинальность</h3>
+        <p style="font-size:10.5pt;">
+          <strong class="white">68% ресторанов</strong> не знают реальную маржу каждого блюда.
+          Блюда, которые кажутся прибыльными, на самом деле приносят убытки. Без актуальных данных о себестоимости
+          меню — это лотерея.
+        </p>
+        <div class="mt-2">
+          <span class="badge badge-red">68% работают вслепую</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pain 3 -->
+    <div class="card" style="display:flex; gap:5mm; align-items:flex-start;">
+      <div style="flex-shrink:0;">
+        <div style="width:16mm; height:16mm; background:rgba(239,68,68,0.12); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:22pt;">
+          &#x23F1;
+        </div>
+      </div>
+      <div style="flex:1;">
+        <h3 style="color:#ef4444;">Запоздалые решения</h3>
+        <p style="font-size:10.5pt;">
+          Проблемы обнаруживаются, когда уже поздно. Без оповещений, без прогнозов, без данных в реальном времени.
+          Владелец узнает о нехватке продуктов, когда жалуется клиент, а об излишках —
+          когда их выбрасывают в конце дня.
+        </p>
+        <div class="mt-2">
+          <span class="badge badge-red">0% проактивности</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="quote mt-6">
+    "Если не измеряешь — не можешь улучшить. А если измеряешь поздно — уже потерял деньги."
+  </div>
+
+  <div class="page-footer">
+    <span>RestoBot v1.0 — Конфиденциально</span>
+    <span>2 / 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 3 — РЕШЕНИЕ
+     ═══════════════════════════════════════════════════ -->
+<div class="page">
+  <h2>Решение &mdash; RestoBot</h2>
+
+  <p class="mt-4" style="font-size:12pt; color:#ffffff; font-weight:600; margin-bottom:2mm;">
+    ИИ-ассистент, который анализирует данные вашей кухни и подсказывает, что делать.
+  </p>
+  <p style="color:#a1a1aa; margin-bottom:8mm;">
+    RestoBot подключается к вашим существующим данным, автоматически их анализирует
+    и отправляет оповещения и отчеты с конкретными действиями через WhatsApp или Telegram.
+    Без установки ПО. Без изменения привычного рабочего процесса.
+  </p>
+
+  <!-- Flow diagram -->
+  <div class="card-highlight mt-4" style="margin-bottom:8mm;">
+    <h4 class="text-center mb-4" style="font-size:11pt; color:#a1a1aa;">Как это работает</h4>
+    <div class="flex" style="align-items:flex-start; justify-content:center;">
+
+      <div class="flow-step">
+        <span class="flow-icon">&#x1F4CA;</span>
+        <h4>1. Загружаете данные</h4>
+        <p style="font-size:9pt; color:#a1a1aa;">Продажи, закупки и меню в Google Sheets. Просто, без кривой обучения.</p>
+      </div>
+
+      <div class="flow-arrow">&#x27A1;</div>
+
+      <div class="flow-step">
+        <span class="flow-icon">&#x1F916;</span>
+        <h4>2. RestoBot анализирует</h4>
+        <p style="font-size:9pt; color:#a1a1aa;">ИИ + алгоритмы обрабатывают все автоматически. 24/7, без остановок.</p>
+      </div>
+
+      <div class="flow-arrow">&#x27A1;</div>
+
+      <div class="flow-step">
+        <span class="flow-icon">&#x1F4F1;</span>
+        <h4>3. Получаете оповещения</h4>
+        <p style="font-size:9pt; color:#a1a1aa;">Отчеты и оповещения приходят в WhatsApp или Telegram. С конкретными действиями.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Differentiators -->
+  <h3 class="mt-6">Почему RestoBot — это другое</h3>
+  <div class="grid-2 mt-4">
+
+    <div class="card">
+      <h4>&#x26A1; Это не очередная система</h4>
+      <p style="font-size:9.5pt;">Не требует установки, обучения и смены привычек. Интегрируется с тем, что вы уже используете.</p>
+    </div>
+
+    <div class="card">
+      <h4>&#x1F9E0; Настоящий интеллект</h4>
+      <p style="font-size:9.5pt;">Не просто показывает данные: интерпретирует, выявляет закономерности и рекомендует конкретные действия.</p>
+    </div>
+
+    <div class="card">
+      <h4>&#x1F4AC; Там, где вы уже есть</h4>
+      <p style="font-size:9.5pt;">Все приходит через WhatsApp или Telegram. Не нужно открывать другое приложение или дашборд.</p>
+    </div>
+
+    <div class="card">
+      <h4>&#x1F552; Работает 24/7</h4>
+      <p style="font-size:9.5pt;">Непрерывный мониторинг. Предупреждает до того, как проблема превратится в убыток.</p>
+    </div>
+
+  </div>
+
+  <div class="card-green text-center mt-6" style="padding:4mm 6mm;">
+    <p style="font-size:12pt; color:#22c55e; font-weight:700; margin:0;">
+      "Это не очередная система. Это умный партнер, который работает 24/7."
+    </p>
+  </div>
+
+  <div class="page-footer">
+    <span>RestoBot v1.0 — Конфиденциально</span>
+    <span>3 / 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 4 — 4 МОДУЛЯ
+     ═══════════════════════════════════════════════════ -->
+<div class="page">
+  <h2>4 Модуля</h2>
+
+  <div class="flex-col mt-4" style="gap:5mm;">
+
+    <!-- Модуль 1 -->
+    <div class="card" style="display:flex; gap:4mm;">
+      <div style="flex-shrink:0; width:12mm; text-align:center;">
+        <span style="font-size:22pt;">&#x1F5D1;</span>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2mm;">
+          <h3 style="margin:0;">Контроль потерь</h3>
+          <span class="badge">Экономия 15-25%</span>
+        </div>
+        <p style="font-size:9.5pt; margin-bottom:2mm;">
+          <strong class="white">Что делает:</strong> Отслеживает списания по категориям, выявляет сезонные паттерны и перезакупки, предлагает конкретные корректировки заказов.
+        </p>
+        <div style="background:#0a0a0a; border-radius:6px; padding:3mm 4mm; font-size:9pt; border-left:3px solid #22c55e;">
+          <strong class="green">Пример отчета:</strong><br>
+          "Салат: 8.5 кг списано за неделю ($12.750). Причина: перезакупка. Рекомендация: сократить заказ на 30%."
+        </div>
+      </div>
+    </div>
+
+    <!-- Модуль 2 -->
+    <div class="card" style="display:flex; gap:4mm;">
+      <div style="flex-shrink:0; width:12mm; text-align:center;">
+        <span style="font-size:22pt;">&#x1F4C8;</span>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2mm;">
+          <h3 style="margin:0;">Прогноз спроса</h3>
+          <span class="badge">Меньше излишков</span>
+        </div>
+        <p style="font-size:9.5pt; margin-bottom:2mm;">
+          <strong class="white">Что делает:</strong> Предсказывает, сколько гостей придет и какие блюда закажут завтра. Учится на исторических данных, дне недели, погоде и событиях.
+        </p>
+        <div style="background:#0a0a0a; border-radius:6px; padding:3mm 4mm; font-size:9pt; border-left:3px solid #22c55e;">
+          <strong class="green">Пример отчета:</strong><br>
+          "Пятница: ожидаем 75 гостей. Топ: Стейк (18), Миланеса (15). Подготовить +20% по сравнению с четвергом."
+        </div>
+      </div>
+    </div>
+
+    <!-- Модуль 3 -->
+    <div class="card" style="display:flex; gap:4mm;">
+      <div style="flex-shrink:0; width:12mm; text-align:center;">
+        <span style="font-size:22pt;">&#x1F4B0;</span>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2mm;">
+          <h3 style="margin:0;">Анализ маржинальности</h3>
+          <span class="badge">Оптимизация меню</span>
+        </div>
+        <p style="font-size:9.5pt; margin-bottom:2mm;">
+          <strong class="white">Что делает:</strong> Рассчитывает реальную маржу каждого блюда в режиме реального времени. Оповещает, когда маржа блюда падает ниже минимума, и предлагает корректировку цены или рецепта.
+        </p>
+        <div style="background:#0a0a0a; border-radius:6px; padding:3mm 4mm; font-size:9pt; border-left:3px solid #22c55e;">
+          <strong class="green">Пример отчета:</strong><br>
+          "Филе с шампиньонами: маржа 50% (минимум 55%). Вариант А: поднять цену до $24.000. Вариант Б: уменьшить шампиньоны на 15%."
+        </div>
+      </div>
+    </div>
+
+    <!-- Модуль 4 -->
+    <div class="card" style="display:flex; gap:4mm;">
+      <div style="flex-shrink:0; width:12mm; text-align:center;">
+        <span style="font-size:22pt;">&#x26A0;&#xFE0F;</span>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2mm;">
+          <h3 style="margin:0;">Система оповещений</h3>
+          <span class="badge">Активна 24/7</span>
+        </div>
+        <p style="font-size:9.5pt; margin-bottom:2mm;">
+          <strong class="white">Что делает:</strong> Непрерывно мониторит все показатели и оповещает при возникновении проблем. Низкий остаток, отрицательная маржа, высокие потери, необычный спрос, дорогой поставщик.
+        </p>
+        <div style="background:#0a0a0a; border-radius:6px; padding:3mm 4mm; font-size:9pt; border-left:3px solid #22c55e;">
+          <strong class="green">Пример отчета:</strong><br>
+          "Сливки: запас на 2 дня. Заказать сегодня до 14:00."
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="page-footer">
+    <span>RestoBot v1.0 — Конфиденциально</span>
+    <span>4 / 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 5 — ОТЧЕТЫ, КОТОРЫЕ ВЫ ПОЛУЧАЕТЕ
+     ═══════════════════════════════════════════════════ -->
+<div class="page">
+  <h2>Отчеты, которые вы получаете</h2>
+
+  <p class="mt-4" style="color:#a1a1aa; margin-bottom:6mm;">
+    Вот как выглядят отчеты, которые приходят на ваш телефон. Понятная информация с конкретными действиями, без лишнего шума.
+  </p>
+
+  <div class="grid-2" style="gap:6mm;">
+
+    <!-- Daily report -->
+    <div>
+      <h3 class="mb-2">Ежедневный отчет</h3>
+      <div style="border-radius:10px; overflow:hidden; border:1px solid #27272a;">
+        <div class="wa-header">
+          <div class="wa-avatar">&#x1F916;</div>
+          <div>
+            <div class="wa-name">RestoBot</div>
+            <div style="font-size:7.5pt; color:#a1a1aa;">в сети</div>
+          </div>
+        </div>
+        <div class="wa-body">
+          <div class="wa-bubble">
+            <strong>&#x1F4CA; RestoBot &mdash; El Patio</strong><br>
+            Вчера (21/03):<br>
+            <br>
+            &#x1F4B0; Выручка: <strong>$210.000</strong> (+13.5%)<br>
+            &#x1F37D; Гостей: <strong>52</strong><br>
+            &#x1F3C6; Топ: Стейк (18), Миланеса (12), Сорентинос (9)<br>
+            &#x1F4C8; Маржа: <strong>63.2%</strong><br>
+            &#x1F5D1; Потери: $15.400 (3.2%)<br>
+            <br>
+            &#x26A0;&#xFE0F; <strong>Оповещения:</strong><br>
+            &bull; Филе: маржа 50% &rarr; поднять цену<br>
+            &bull; Салат: 8.5 кг списано &rarr; заказывать меньше<br>
+            <br>
+            &#x1F4A1; <strong>Потенциальная экономия: $27.150/мес</strong>
+            <div class="wa-time">08:30 &#x2713;&#x2713;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weekly report -->
+    <div>
+      <h3 class="mb-2">Еженедельный отчет</h3>
+      <div style="border-radius:10px; overflow:hidden; border:1px solid #27272a;">
+        <div class="wa-header">
+          <div class="wa-avatar">&#x1F916;</div>
+          <div>
+            <div class="wa-name">RestoBot</div>
+            <div style="font-size:7.5pt; color:#a1a1aa;">в сети</div>
+          </div>
+        </div>
+        <div class="wa-body">
+          <div class="wa-bubble">
+            <strong>&#x1F4CA; Итоги недели</strong><br>
+            Неделя 17-23 мар:<br>
+            <br>
+            &#x1F4B0; Выручка: <strong>$1.280.000</strong> (+8%)<br>
+            &#x1F37D; Гостей: <strong>312</strong> (в среднем 45/день)<br>
+            &#x1F4C8; Средняя маржа: <strong>61.4%</strong><br>
+            &#x1F5D1; Потери за неделю: <strong>$89.600</strong> (3.5%)<br>
+            <br>
+            &#x1F31F; <strong>Достижения:</strong><br>
+            &bull; Потери -18% к предыдущей неделе<br>
+            &bull; Миланеса: новый лидер продаж (+25%)<br>
+            <br>
+            &#x1F4CB; <strong>На эту неделю:</strong><br>
+            &bull; Пересмотреть цену филе (+5%)<br>
+            &bull; Сократить заказ овощей на 20%<br>
+            &bull; В пятницу ожидаем 80+ гостей
+            <div class="wa-time">Пн 08:00 &#x2713;&#x2713;</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-4" style="text-align:center;">
+        <p style="font-size:9pt; color:#71717a; margin-bottom:1mm;">Также доступно через</p>
+        <p style="font-size:10pt; color:#ffffff; font-weight:600;">
+          &#x1F4AC; Telegram &nbsp;&bull;&nbsp; &#x1F4E7; Email
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="page-footer">
+    <span>RestoBot v1.0 — Конфиденциально</span>
+    <span>5 / 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 6 — ТАРИФЫ И ЦЕНЫ
+     ═══════════════════════════════════════════════════ -->
+<div class="page">
+  <h2>Тарифы и цены</h2>
+
+  <p class="mt-4" style="color:#a1a1aa; margin-bottom:8mm;">
+    Три тарифа для ресторанов любого размера. Без минимального срока. Отмена в любой момент.
+  </p>
+
+  <div class="grid-3" style="gap:4mm;">
+
+    <!-- Starter -->
+    <div class="card text-center" style="display:flex; flex-direction:column;">
+      <h3 style="color:#a1a1aa; font-size:12pt; margin-bottom:3mm;">Starter</h3>
+      <div style="margin-bottom:4mm;">
+        <span style="font-size:24pt; font-weight:800; color:#ffffff;">$15.000</span>
+        <span style="font-size:9pt; color:#71717a;">/мес</span>
+      </div>
+      <div class="divider"></div>
+      <div style="text-align:left; font-size:9pt; flex:1;">
+        <p><span class="check">&#x2705;</span> Контроль потерь</p>
+        <p><span class="check">&#x2705;</span> Базовые оповещения</p>
+        <p><span class="check">&#x2705;</span> Ежедневный отчет</p>
+        <p><span class="cross">&#x274C;</span> <span class="muted">Прогноз спроса</span></p>
+        <p><span class="cross">&#x274C;</span> <span class="muted">Анализ маржинальности</span></p>
+        <p><span class="cross">&#x274C;</span> <span class="muted">Еженедельный отчет</span></p>
+        <p><span class="cross">&#x274C;</span> <span class="muted">Веб-дашборд</span></p>
+      </div>
+      <div class="divider"></div>
+      <p style="font-size:8.5pt; color:#a1a1aa;">
+        <strong>Поддержка:</strong> Email<br>
+        <strong>Настройка:</strong> Самостоятельно
+      </p>
+    </div>
+
+    <!-- Pro -->
+    <div class="card text-center plan-popular" style="display:flex; flex-direction:column;">
+      <div class="plan-popular-tag">САМЫЙ ПОПУЛЯРНЫЙ</div>
+      <h3 style="font-size:12pt; margin-bottom:3mm;">Pro</h3>
+      <div style="margin-bottom:4mm;">
+        <span style="font-size:24pt; font-weight:800; color:#22c55e;">$30.000</span>
+        <span style="font-size:9pt; color:#71717a;">/мес</span>
+      </div>
+      <div class="divider-green"></div>
+      <div style="text-align:left; font-size:9pt; flex:1;">
+        <p><span class="check">&#x2705;</span> Контроль потерь</p>
+        <p><span class="check">&#x2705;</span> Полные оповещения</p>
+        <p><span class="check">&#x2705;</span> Ежедневный отчет</p>
+        <p><span class="check">&#x2705;</span> <strong class="green">Прогноз спроса</strong></p>
+        <p><span class="check">&#x2705;</span> <strong class="green">Анализ маржинальности</strong></p>
+        <p><span class="check">&#x2705;</span> <strong class="green">Еженедельный отчет</strong></p>
+        <p><span class="cross">&#x274C;</span> <span class="muted">Веб-дашборд</span></p>
+      </div>
+      <div class="divider-green"></div>
+      <p style="font-size:8.5pt; color:#a1a1aa;">
+        <strong>Поддержка:</strong> WhatsApp<br>
+        <strong>Настройка:</strong> С ассистентом
+      </p>
+    </div>
+
+    <!-- Enterprise -->
+    <div class="card text-center" style="display:flex; flex-direction:column;">
+      <h3 style="color:#a1a1aa; font-size:12pt; margin-bottom:3mm;">Enterprise</h3>
+      <div style="margin-bottom:4mm;">
+        <span style="font-size:24pt; font-weight:800; color:#ffffff;">$60.000</span>
+        <span style="font-size:9pt; color:#71717a;">/мес</span>
+      </div>
+      <div class="divider"></div>
+      <div style="text-align:left; font-size:9pt; flex:1;">
+        <p><span class="check">&#x2705;</span> Контроль потерь</p>
+        <p><span class="check">&#x2705;</span> Полные оповещения</p>
+        <p><span class="check">&#x2705;</span> Ежедневный отчет</p>
+        <p><span class="check">&#x2705;</span> Прогноз спроса</p>
+        <p><span class="check">&#x2705;</span> Анализ маржинальности</p>
+        <p><span class="check">&#x2705;</span> Еженедельный отчет</p>
+        <p><span class="check">&#x2705;</span> <strong class="green">Веб-дашборд</strong></p>
+      </div>
+      <div class="divider"></div>
+      <p style="font-size:8.5pt; color:#a1a1aa;">
+        <strong>Поддержка:</strong> Персональная<br>
+        <strong>Настройка:</strong> Индивидуальная
+      </p>
+    </div>
+
+  </div>
+
+  <!-- Launch offer -->
+  <div class="cta-box mt-8">
+    <h3>&#x1F680; АКЦИЯ К ЗАПУСКУ</h3>
+    <p style="font-size:14pt; color:#ffffff; font-weight:700; margin-bottom:1mm;">
+      30 дней бесплатно на любом тарифе
+    </p>
+    <p style="font-size:10pt; color:#a1a1aa; margin:0;">
+      Без обязательств. Без привязки карты. Начните сегодня и отмените в любой момент.
+    </p>
+  </div>
+
+  <!-- Comparison table -->
+  <div class="mt-8">
+    <h3>Полное сравнение</h3>
+    <table class="mt-2">
+      <thead>
+        <tr>
+          <th style="width:40%;">Функциональность</th>
+          <th style="width:20%; text-align:center;">Starter</th>
+          <th style="width:20%; text-align:center; color:#22c55e;">Pro</th>
+          <th style="width:20%; text-align:center;">Enterprise</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Контроль потерь</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td></tr>
+        <tr><td>Оповещения</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td></tr>
+        <tr><td>Прогноз спроса</td><td class="text-center cross">&#x274C;</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td></tr>
+        <tr><td>Анализ маржинальности</td><td class="text-center cross">&#x274C;</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td></tr>
+        <tr><td>Ежедневный отчет</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td></tr>
+        <tr><td>Еженедельный отчет</td><td class="text-center cross">&#x274C;</td><td class="text-center check">&#x2705;</td><td class="text-center check">&#x2705;</td></tr>
+        <tr><td>Веб-дашборд</td><td class="text-center cross">&#x274C;</td><td class="text-center cross">&#x274C;</td><td class="text-center check">&#x2705;</td></tr>
+        <tr><td>Поддержка</td><td class="text-center">Email</td><td class="text-center" style="color:#22c55e;">WhatsApp</td><td class="text-center">Персональная</td></tr>
+        <tr><td>Настройка</td><td class="text-center">Самостоятельно</td><td class="text-center" style="color:#22c55e;">С ассистентом</td><td class="text-center">Индивидуальная</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="page-footer">
+    <span>RestoBot v1.0 — Конфиденциально</span>
+    <span>6 / 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 7 — ПРИМЕР ЭФФЕКТИВНОСТИ / ROI
+     ═══════════════════════════════════════════════════ -->
+<div class="page">
+  <h2>Пример эффективности / ROI</h2>
+
+  <p class="mt-4" style="color:#a1a1aa; margin-bottom:6mm;">
+    Цифры говорят сами за себя. RestoBot окупается в первые дни использования.
+  </p>
+
+  <!-- Hero ROI -->
+  <div class="card-highlight" style="margin-bottom:8mm;">
+    <h3 class="text-center mb-4" style="font-size:13pt;">Пример: Ресторан с выручкой $5M/мес</h3>
+
+    <div class="grid-3" style="gap:4mm; margin-bottom:5mm;">
+      <div class="card text-center">
+        <div class="stat-label">Потери сейчас (15%)</div>
+        <div class="stat-value" style="color:#ef4444;">$750K</div>
+        <div class="stat-label">в месяц</div>
+      </div>
+      <div class="card text-center">
+        <div class="stat-label">С RestoBot (10%)</div>
+        <div class="stat-value">$500K</div>
+        <div class="stat-label">в месяц</div>
+      </div>
+      <div class="card text-center">
+        <div class="stat-label">Чистая экономия</div>
+        <div class="stat-value">$250K</div>
+        <div class="stat-label">в месяц</div>
+      </div>
+    </div>
+
+    <div class="flex" style="justify-content:center; gap:8mm;">
+      <div class="text-center">
+        <div class="stat-label">Стоимость RestoBot Pro</div>
+        <div style="font-size:16pt; font-weight:800; color:#ffffff;">$30.000/мес</div>
+      </div>
+      <div class="text-center">
+        <div class="stat-label">ROI</div>
+        <div style="font-size:16pt; font-weight:800; color:#22c55e;">733%</div>
+      </div>
+      <div class="text-center">
+        <div class="stat-label">Окупается за</div>
+        <div style="font-size:16pt; font-weight:800; color:#22c55e;">4 дня</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROI table by size -->
+  <h3>ROI по размеру ресторана</h3>
+  <table class="mt-4">
+    <thead>
+      <tr>
+        <th>Выручка</th>
+        <th>Потери сейчас (15%)</th>
+        <th>Ожидаемая экономия</th>
+        <th>Рекомендуемый тариф</th>
+        <th style="text-align:center;">ROI</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong class="white">$2M/мес</strong></td>
+        <td style="color:#ef4444;">$300K/мес</td>
+        <td class="green">$100K/мес</td>
+        <td>Starter &mdash; $15K</td>
+        <td class="text-center"><strong class="green">567%</strong></td>
+      </tr>
+      <tr>
+        <td><strong class="white">$5M/мес</strong></td>
+        <td style="color:#ef4444;">$750K/мес</td>
+        <td class="green">$250K/мес</td>
+        <td>Pro &mdash; $30K</td>
+        <td class="text-center"><strong class="green">733%</strong></td>
+      </tr>
+      <tr>
+        <td><strong class="white">$10M/мес</strong></td>
+        <td style="color:#ef4444;">$1.5M/мес</td>
+        <td class="green">$500K/мес</td>
+        <td>Enterprise &mdash; $60K</td>
+        <td class="text-center"><strong class="green">733%</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="divider mt-6"></div>
+
+  <!-- Additional value -->
+  <h3 class="mt-6">Дополнительная ценность (не учтена в расчете)</h3>
+  <div class="grid-2 mt-4">
+    <div class="card">
+      <h4>&#x23F0; Время владельца</h4>
+      <p style="font-size:9.5pt;">
+        3-5 часов в неделю, которые владелец тратит на ручной анализ цифр. RestoBot делает это автоматически.
+      </p>
+    </div>
+    <div class="card">
+      <h4>&#x1F4CB; Лучший сервис</h4>
+      <p style="font-size:9.5pt;">
+        Меньше дефицита = меньше "этого нет в наличии". Точный прогноз = блюда всегда доступны.
+      </p>
+    </div>
+    <div class="card">
+      <h4>&#x1F91D; Переговоры с поставщиками</h4>
+      <p style="font-size:9.5pt;">
+        Точные данные о потреблении для переговоров о лучших ценах и условиях.
+      </p>
+    </div>
+    <div class="card">
+      <h4>&#x1F4C8; Масштабируемость</h4>
+      <p style="font-size:9.5pt;">
+        Одна и та же система работает для 1 или 10 филиалов. Растет вместе с вашим бизнесом.
+      </p>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>RestoBot v1.0 — Конфиденциально</span>
+    <span>7 / 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 8 — КАК НАЧАТЬ
+     ═══════════════════════════════════════════════════ -->
+<div class="page">
+  <h2>Как начать</h2>
+
+  <p class="mt-4" style="color:#a1a1aa; margin-bottom:8mm; font-size:12pt;">
+    За 3 простых шага ваш ресторан начнет экономить.
+  </p>
+
+  <div class="flex" style="gap:5mm; margin-bottom:10mm;">
+
+    <div class="card-green text-center" style="flex:1; padding:8mm 5mm;">
+      <div class="step-num">1</div>
+      <div style="font-size:20pt; margin-bottom:3mm;">&#x1F4DE;</div>
+      <h3 style="font-size:13pt; margin-bottom:3mm;">Свяжитесь с нами</h3>
+      <p style="font-size:9.5pt; color:#a1a1aa;">
+        Напишите нам в WhatsApp или по email. Мы ответим менее чем за 2 часа.
+      </p>
+    </div>
+
+    <div class="card-green text-center" style="flex:1; padding:8mm 5mm;">
+      <div class="step-num">2</div>
+      <div style="font-size:20pt; margin-bottom:3mm;">&#x1F4CB;</div>
+      <h3 style="font-size:13pt; margin-bottom:3mm;">Настройка за 30 мин</h3>
+      <p style="font-size:9.5pt; color:#a1a1aa;">
+        Загружаем ваше меню, настраиваем все. Без установки, без сложностей.
+      </p>
+    </div>
+
+    <div class="card-green text-center" style="flex:1; padding:8mm 5mm;">
+      <div class="step-num">3</div>
+      <div style="font-size:20pt; margin-bottom:3mm;">&#x1F4CA;</div>
+      <h3 style="font-size:13pt; margin-bottom:3mm;">Первый отчет за 24ч</h3>
+      <p style="font-size:9.5pt; color:#a1a1aa;">
+        Вы начинаете видеть результаты немедленно. Реальные данные, конкретные действия.
+      </p>
+    </div>
+
+  </div>
+
+  <!-- Contact -->
+  <div class="card-highlight text-center" style="padding:10mm 8mm; margin-bottom:8mm;">
+    <h3 style="font-size:18pt; color:#ffffff; margin-bottom:6mm;">Давайте поговорим</h3>
+
+    <div class="flex" style="justify-content:center; gap:10mm; margin-bottom:6mm;">
+      <div>
+        <div style="font-size:24pt; margin-bottom:2mm;">&#x1F4AC;</div>
+        <div style="font-size:10pt; color:#71717a;">WhatsApp</div>
+        <div style="font-size:12pt; color:#ffffff; font-weight:700;">+54 9 XXX XXX XXXX</div>
+      </div>
+      <div>
+        <div style="font-size:24pt; margin-bottom:2mm;">&#x1F4E7;</div>
+        <div style="font-size:10pt; color:#71717a;">Email</div>
+        <div style="font-size:12pt; color:#ffffff; font-weight:700;">info@restobot.com.ar</div>
+      </div>
+      <div>
+        <div style="font-size:24pt; margin-bottom:2mm;">&#x1F310;</div>
+        <div style="font-size:10pt; color:#71717a;">Сайт</div>
+        <div style="font-size:12pt; color:#ffffff; font-weight:700;">restobot.com.ar</div>
+      </div>
+    </div>
+
+    <div class="divider-green" style="width:80mm; margin:4mm auto;"></div>
+
+    <p style="font-size:13pt; color:#22c55e; font-weight:700; margin-top:4mm;">
+      30 дней бесплатно. Без обязательств. Начните сегодня.
+    </p>
+  </div>
+
+  <!-- FAQ mini -->
+  <h3 class="mt-6">Частые вопросы</h3>
+  <div class="grid-2 mt-4">
+    <div class="card">
+      <h4 style="font-size:9.5pt;">Нужно ли что-то устанавливать?</h4>
+      <p style="font-size:9pt;">Нет. RestoBot работает полностью в облаке. Нужен только телефон с WhatsApp или Telegram.</p>
+    </div>
+    <div class="card">
+      <h4 style="font-size:9.5pt;">Что происходит с моими данными?</h4>
+      <p style="font-size:9pt;">Ваши данные конфиденциальны и зашифрованы. Мы никогда не передаем информацию третьим лицам.</p>
+    </div>
+    <div class="card">
+      <h4 style="font-size:9.5pt;">Могу ли я отменить в любой момент?</h4>
+      <p style="font-size:9pt;">Да. Без минимального срока, без штрафов. Отменяете — и все.</p>
+    </div>
+    <div class="card">
+      <h4 style="font-size:9.5pt;">Работает ли с моей текущей системой?</h4>
+      <p style="font-size:9pt;">Да. RestoBot адаптируется к вашему способу работы, а не наоборот. Совместим с любой POS-системой.</p>
+    </div>
+  </div>
+
+  <!-- Final footer -->
+  <div style="position:absolute; bottom:8mm; left:8mm; right:8mm; text-align:center;">
+    <div class="divider" style="margin-bottom:3mm;"></div>
+    <p style="font-size:9pt; color:#52525b;">
+      <strong>RestoBot</strong> &mdash; Технология Pepino Pick &nbsp;|&nbsp; Кордова, Аргентина &nbsp;|&nbsp; 2026
+    </p>
+  </div>
+</div>
+
+</body>
+</html>
