@@ -578,6 +578,17 @@ ${c(C.cyan, "Pipelines:")}
   ${c(C.bold, "evening")}             Evening pipeline (dry-run)
   ${c(C.bold, "sunday")}              Sunday pipeline (dry-run)
 
+${c(C.cyan, "Task Brain:")}
+  ${c(C.bold, "task add")} "описание"  Add task (auto-analyzes 8 dimensions)
+  ${c(C.bold, "task plan")}            Optimal day plan from all tasks
+  ${c(C.bold, "task today")}           What to do right now
+  ${c(C.bold, "task matrix")}          Eisenhower matrix (Q1-Q4)
+  ${c(C.bold, "task done")} "описание" Mark task completed
+  ${c(C.bold, "task backlog")}         Show unplanned tasks
+  ${c(C.bold, "trip")}                 Trip optimizer (delivery + extras)
+  ${c(C.bold, "multiplier")}           Multiplier scan (7 tasks = 1 action)
+  ${c(C.bold, "planning")} [evening|weekly|monthly|review]  Planning cycle
+
 ${c(C.cyan, "System:")}
   ${c(C.bold, "cron")}                List cron jobs with last run time
   ${c(C.bold, "logs")} [script]       Tail last 20 lines of script log
@@ -721,6 +732,56 @@ async function main() {
         console.log(out);
       } catch (e) {
         console.error(e.stdout || e.message);
+      }
+      break;
+
+    case "task": {
+      const sub = rest[0] || "today";
+      const taskArg = rest.slice(1).join(" ");
+      const taskCmd =
+        sub === "add" ? `add "${taskArg}"` : sub === "done" ? `done "${taskArg}"` : sub;
+      try {
+        const out = execSync(`node ${path.join(__dirname, "task-brain.cjs")} ${taskCmd}`, {
+          encoding: "utf8",
+          timeout: 30000,
+        });
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
+      }
+      break;
+    }
+    case "trip":
+      try {
+        const out = execSync(
+          `node ${path.join(__dirname, "trip-optimizer.cjs")} ${rest[0] || "plan"} --dry-run`,
+          { encoding: "utf8", timeout: 30000 },
+        );
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
+      }
+      break;
+    case "multiplier":
+      try {
+        const out = execSync(
+          `node ${path.join(__dirname, "multiplier-planner.cjs")} ${rest[0] || "scan"} --dry-run`,
+          { encoding: "utf8", timeout: 30000 },
+        );
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
+      }
+      break;
+    case "planning":
+      try {
+        const out = execSync(
+          `node ${path.join(__dirname, "planning-cycle.cjs")} ${rest[0] || "evening"} --dry-run`,
+          { encoding: "utf8", timeout: 30000 },
+        );
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
       }
       break;
 
