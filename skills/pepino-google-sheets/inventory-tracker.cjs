@@ -23,6 +23,7 @@
 const { trace } = require("./langfuse-trace.cjs");
 const { sendAlert, sendStatus, send } = require("./telegram-helper.cjs");
 const { normalize } = require("./product-aliases.cjs");
+const { parseNum, parseDate, fmtDate, rowsToObjects } = require("./helpers.cjs");
 
 // Throttled sender с fallback на прямую отправку
 let sendThrottled;
@@ -45,77 +46,14 @@ const WARNING_DAYS = 7;
 const CONSUMPTION_WINDOW_DAYS = 7;
 
 // -- Хелперы ------------------------------------------------------------------
+// parseNum, parseDate, fmtDate, rowsToObjects импортированы из helpers.cjs
 
-/** Безопасное извлечение числа из строки (поддержка запятых, пробелов, валюты) */
-function parseNum(val) {
-  if (val === undefined || val === null || val === "") return 0;
-  const cleaned = String(val)
-    .replace(/\s/g, "")
-    .replace(",", ".")
-    .replace(/[^\d.\-]/g, "");
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
-}
-
-/**
- * Парсит дату из строки. Поддерживает форматы:
- *   - DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY
- *   - YYYY-MM-DD
- * @param {string} raw
- * @returns {Date|null}
- */
-function parseDate(raw) {
-  if (!raw) return null;
-  const s = String(raw).trim();
-
-  // DD/MM/YYYY или DD.MM.YYYY или DD-MM-YYYY
-  const dmy = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
-  if (dmy) {
-    const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  // YYYY-MM-DD
-  const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (ymd) {
-    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  return null;
-}
-
-/** Дата N дней назад (начало дня, UTC) */
+/** Дата N дней назад (начало дня) */
 function daysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
   d.setHours(0, 0, 0, 0);
   return d;
-}
-
-/** Форматирует дату как YYYY-MM-DD */
-function fmtDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-
-/**
- * Преобразует массив строк из Sheets в массив объектов.
- * Первая строка — заголовки.
- * @param {string[][]} rows
- * @returns {Record<string, string>[]}
- */
-function rowsToObjects(rows) {
-  if (!rows || rows.length < 2) return [];
-  const headers = rows[0].map((h) => String(h).trim());
-  const result = [];
-  for (let i = 1; i < rows.length; i++) {
-    const obj = {};
-    for (let j = 0; j < headers.length; j++) {
-      obj[headers[j]] = rows[i]?.[j] ?? "";
-    }
-    result.push(obj);
-  }
-  return result;
 }
 
 // -- Основная логика ----------------------------------------------------------
@@ -302,39 +240,53 @@ async function main() {
   const timestamp = new Date().toISOString();
   console.error(`[${timestamp}] Запуск inventory-tracker...${DRY_RUN ? " (DRY RUN)" : ""}`);
 
-  // Динамический импорт ESM-модуля sheets.js из CJS
-  /** @type {{ readSheet: Function, PEPINO_SHEETS_ID: string }} */
-  let readSheet, PEPINO_SHEETS_ID;
+  // Источник данных: farm-state кеш -> sheets.js (fallback)
+  let inventoryRows, salesRows, productionRows;
+  let farmState = null;
   try {
-    const sheetsModule = await import("./sheets.js");
-    readSheet = sheetsModule.readSheet;
-    PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
+    farmState = await require("./farm-state.cjs").getState();
   } catch (err) {
-    console.error(`[inventory-tracker] Не удалось импортировать sheets.js: ${err.message}`);
-    process.exit(1);
+    console.error(`[inventory-tracker] farm-state недоступен: ${err.message}`);
   }
 
-  // Параллельное чтение трёх листов
-  let inventoryRaw, salesRaw, productionRaw;
-  try {
-    [inventoryRaw, salesRaw, productionRaw] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F6D2} Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
-    ]);
-  } catch (err) {
-    const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
-    console.error(`[inventory-tracker] ${msg}`);
-    if (!DRY_RUN) {
-      await sendAlert(`!!! Inventory Tracker FAIL\n${msg}`, TG_THREAD_INVENTORY);
+  if (farmState && farmState.inventory && farmState.sales && farmState.production) {
+    inventoryRows = farmState.inventory;
+    salesRows = farmState.sales;
+    productionRows = farmState.production;
+    console.error("[inventory-tracker] Данные загружены из farm-state кеша");
+  } else {
+    // Fallback: прямое чтение из Google Sheets
+    /** @type {{ readSheet: Function, PEPINO_SHEETS_ID: string }} */
+    let readSheet, PEPINO_SHEETS_ID;
+    try {
+      const sheetsModule = await import("./sheets.js");
+      readSheet = sheetsModule.readSheet;
+      PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
+    } catch (err) {
+      console.error(`[inventory-tracker] Не удалось импортировать sheets.js: ${err.message}`);
+      process.exit(1);
     }
-    process.exit(1);
-  }
 
-  // Парсинг строк в объекты
-  const inventoryRows = rowsToObjects(inventoryRaw);
-  const salesRows = rowsToObjects(salesRaw);
-  const productionRows = rowsToObjects(productionRaw);
+    let inventoryRaw, salesRaw, productionRaw;
+    try {
+      [inventoryRaw, salesRaw, productionRaw] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F6D2} Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
+      ]);
+    } catch (err) {
+      const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
+      console.error(`[inventory-tracker] ${msg}`);
+      if (!DRY_RUN) {
+        await sendAlert(`!!! Inventory Tracker FAIL\n${msg}`, TG_THREAD_INVENTORY);
+      }
+      process.exit(1);
+    }
+
+    inventoryRows = rowsToObjects(inventoryRaw);
+    salesRows = rowsToObjects(salesRaw);
+    productionRows = rowsToObjects(productionRaw);
+  }
 
   console.error(
     `[inventory-tracker] Загружено: склад=${inventoryRows.length}, ` +

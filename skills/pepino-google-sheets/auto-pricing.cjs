@@ -30,6 +30,7 @@ const { apiHeaders } = require("./api-auth.cjs");
 const { trace } = require("./langfuse-trace.cjs");
 const { sendReport, sendAlert } = require("./telegram-helper.cjs");
 const { normalize } = require("./product-aliases.cjs");
+const { parseNum, parseDate } = require("./helpers.cjs");
 
 // ── Конфигурация ──────────────────────────────────────────────────────────────
 
@@ -98,46 +99,11 @@ async function readSheetAsObjects(sheets, sheetName) {
 }
 
 // ── Парсинг данных ──────────────────────────────────────────────────────────
-
-/**
- * Парсит дату из формата DD/MM/YYYY или YYYY-MM-DD
- * @param {string} dateStr
- * @returns {Date|null}
- */
-function parseDate(dateStr) {
-  if (!dateStr) return null;
-  const str = dateStr.trim();
-
-  // Формат DD/MM/YYYY
-  const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashMatch) {
-    return new Date(parseInt(slashMatch[3]), parseInt(slashMatch[2]) - 1, parseInt(slashMatch[1]));
-  }
-
-  // Формат YYYY-MM-DD
-  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) {
-    return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
-  }
-
-  return null;
-}
-
-/**
- * Парсит число из строки (поддержка запятых как разделителя десятичных)
- * @param {string} val
- * @returns {number}
- */
-function parseNum(val) {
-  if (!val) return 0;
-  const cleaned = val.toString().replace(/\s/g, "").replace(",", ".");
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? 0 : n;
-}
+// parseNum и parseDate импортированы из helpers.cjs
 
 /**
  * Нормализует название продукта через canonical aliases.
- * Обёртка для обратной совместимости — вызывает normalize() из product-aliases.cjs.
+ * Обёртка для обратной совместимости -- вызывает normalize() из product-aliases.cjs.
  * @param {string} name
  * @returns {string}
  */
@@ -669,14 +635,49 @@ async function runPricingAnalysis(options = {}) {
   if (filterProduct) console.log(`Фильтр продукта: ${filterProduct}`);
   console.log("");
 
-  // Шаг 1: Подключение к Google Sheets
-  console.log("[1/5] Подключение к Google Sheets...");
-  const sheets = await getSheetsClient();
+  // Шаг 1: Попытка загрузки из farm-state кеша
+  let farmState = null;
+  try {
+    farmState = await require("./farm-state.cjs").getState();
+  } catch (err) {
+    console.log(`[INFO] farm-state недоступен: ${err.message}`);
+  }
+
+  /** @type {import("googleapis").sheets_v4.Sheets|null} */
+  let sheets = null;
 
   // Шаг 2: Чтение продаж
   console.log(`[2/5] Чтение продаж за ${ANALYSIS_DAYS} дней...`);
-  let sales = await readSales(sheets, ANALYSIS_DAYS);
-  console.log(`  Найдено ${sales.length} продаж`);
+  /** @type {SaleRecord[]} */
+  let sales;
+
+  if (farmState && farmState.sales && farmState.sales.length > 0) {
+    // Парсим из farm-state (уже объекты) с фильтрацией по дате
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - ANALYSIS_DAYS);
+    sales = [];
+    for (const row of farmState.sales) {
+      const date = parseDate(row["Дата"]);
+      if (!date || date < cutoff) continue;
+      const product = normalizeProduct(row["Продукт"]);
+      if (!product) continue;
+      sales.push({
+        date,
+        client: (row["Клиент"] || "").trim(),
+        product,
+        kg: parseNum(row["Кол-во кг"]),
+        pricePerKg: parseNum(row["Цена ARS/кг"]),
+        totalArs: parseNum(row["Сумма ARS"]) || parseNum(row["Итого ARS"]),
+        status: (row["Статус"] || "").trim(),
+      });
+    }
+    console.log(`  Найдено ${sales.length} продаж (из farm-state кеша)`);
+  } else {
+    console.log("[1/5] Подключение к Google Sheets...");
+    sheets = await getSheetsClient();
+    sales = await readSales(sheets, ANALYSIS_DAYS);
+    console.log(`  Найдено ${sales.length} продаж`);
+  }
 
   // Фильтр по продукту если указан
   if (filterProduct) {
@@ -687,8 +688,33 @@ async function runPricingAnalysis(options = {}) {
 
   // Шаг 3: Чтение расходов
   console.log(`[3/5] Чтение расходов за ${ANALYSIS_DAYS} дней...`);
-  const expenses = await readExpenses(sheets, ANALYSIS_DAYS);
-  console.log(`  Найдено ${expenses.length} записей расходов`);
+  /** @type {ExpenseRecord[]} */
+  let expenses;
+
+  if (farmState && farmState.expenses && farmState.expenses.length > 0) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - ANALYSIS_DAYS);
+    expenses = [];
+    for (const row of farmState.expenses) {
+      const date = parseDate(row["Дата"]);
+      if (!date || date < cutoff) continue;
+      expenses.push({
+        date,
+        name: (row["Наименование"] || "").trim(),
+        qty: parseNum(row["Кол-во"]),
+        unit: (row["Единицы"] || "").trim(),
+        amountArs: parseNum(row["Сумма ARS"]),
+      });
+    }
+    console.log(`  Найдено ${expenses.length} записей расходов (из farm-state кеша)`);
+  } else {
+    if (!sheets) {
+      console.log("[1/5] Подключение к Google Sheets...");
+      sheets = await getSheetsClient();
+    }
+    expenses = await readExpenses(sheets, ANALYSIS_DAYS);
+    console.log(`  Найдено ${expenses.length} записей расходов`);
+  }
 
   // Шаг 4: Расчёт себестоимости
   console.log("[4/5] Расчёт себестоимости и рекомендаций...");
@@ -749,8 +775,9 @@ async function runPricingAnalysis(options = {}) {
     console.log(JSON.stringify(report, null, 2));
     console.log("\n[DRY-RUN] Запись в Sheets и Telegram пропущены");
   } else {
-    // Запись в Sheets
+    // Запись в Sheets (подключаемся к Sheets если ещё не подключены)
     try {
+      if (!sheets) sheets = await getSheetsClient();
       await writeToSheets(sheets, products, costAnalysis);
     } catch (err) {
       console.error(`[ERROR] Запись в Sheets: ${err.message}`);

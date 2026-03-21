@@ -20,6 +20,7 @@ const { apiHeaders } = require("./api-auth.cjs");
 const { trace } = require("./langfuse-trace.cjs");
 const { normalize } = require("./product-aliases.cjs");
 const { send } = require("./telegram-helper.cjs");
+const { parseNum, rowsToObjects, fmtDate } = require("./helpers.cjs");
 
 // Throttled sender с fallback на прямую отправку
 let sendThrottled;
@@ -93,27 +94,15 @@ function postJson(path, body) {
 
 // ── Analysis ─────────────────────────────────────────────────────────────────
 
-function parseNum(v) {
-  if (typeof v === "number") return v;
-  const s = String(v || "")
-    .replace(/\./g, "")
-    .replace(",", ".")
-    .replace("%", "");
-  return parseFloat(s) || 0;
-}
-
-function dateStr(d) {
-  return d.toISOString().slice(0, 10);
-}
-
+/** Дата в формате YYYY-MM-DD для N дней назад */
 function nDaysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return dateStr(d);
+  return fmtDate(d);
 }
 
 function analyzePnL(sales, expenses) {
-  const today = dateStr(new Date());
+  const today = fmtDate(new Date());
   const week7 = nDaysAgo(7);
   const week14 = nDaysAgo(14);
 
@@ -222,7 +211,7 @@ function analyzePnL(sales, expenses) {
 
 function formatPnL(pnl) {
   const lines = [];
-  const d = dateStr(new Date());
+  const d = fmtDate(new Date());
   lines.push(`<b>💰 Daily P&L — ${d}</b>\n`);
 
   // Today
@@ -290,30 +279,32 @@ async function main() {
   const startMs = Date.now();
   console.log(`[${new Date().toISOString()}] Daily P&L starting...`);
 
+  // Источник данных: farm-state кеш -> sheets.js -> HTTP API
   let sales, expenses;
+  let farmState = null;
   try {
-    const { readSheet, PEPINO_SHEETS_ID } = require("./sheets.js");
-    const [salesRows, expRows] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
-    ]);
+    farmState = await require("./farm-state.cjs").getState();
+  } catch (err) {
+    console.log(`[INFO] farm-state недоступен: ${err.message}`);
+  }
 
-    const toJson = (rows) => {
-      if (!rows || rows.length < 2) return [];
-      const h = rows[0];
-      return rows.slice(1).map((r) => {
-        const o = {};
-        h.forEach((k, i) => {
-          o[k] = r[i] || "";
-        });
-        return o;
-      });
-    };
-    sales = toJson(salesRows);
-    expenses = toJson(expRows);
-  } catch {
-    console.log("Direct read failed, using API...");
-    [sales, expenses] = await Promise.all([fetchJson("/sales"), fetchJson("/expenses")]);
+  if (farmState && farmState.sales && farmState.expenses) {
+    sales = farmState.sales;
+    expenses = farmState.expenses;
+    console.log("[INFO] Данные загружены из farm-state кеша");
+  } else {
+    try {
+      const { readSheet, PEPINO_SHEETS_ID } = require("./sheets.js");
+      const [salesRows, expRows] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
+      ]);
+      sales = rowsToObjects(salesRows);
+      expenses = rowsToObjects(expRows);
+    } catch {
+      console.log("Direct read failed, using API...");
+      [sales, expenses] = await Promise.all([fetchJson("/sales"), fetchJson("/expenses")]);
+    }
   }
 
   console.log(`Sales: ${sales.length}, Expenses: ${expenses.length}`);
