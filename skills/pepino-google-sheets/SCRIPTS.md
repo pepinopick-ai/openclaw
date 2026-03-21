@@ -1,140 +1,94 @@
-# Pepino Pick Automation Scripts Index
+# Pepino Agent OS — Script Catalog
 
+**80 scripts | 66 CJS + 14 JS | 0 syntax errors**
 All scripts run from: `/home/roman/openclaw/skills/pepino-google-sheets/`
-All support `--dry-run` flag (skip Telegram/Sheets writes).
+All support `--dry-run` flag.
 
-## Core Infrastructure
+## Shared Modules (use, don't duplicate!)
 
-| Script                | Purpose                                     | Schedule           |
-| --------------------- | ------------------------------------------- | ------------------ |
-| `sheets-api.js`       | JSON API server for Sheets data (port 4000) | Docker container   |
-| `sheets.js`           | Google Sheets read/write module             | imported by others |
-| `api-auth.js/cjs`     | Shared Bearer token auth module             | imported by others |
-| `telegram-helper.cjs` | Telegram send helper (threads, HTML)        | imported by others |
-| `langfuse-trace.cjs`  | LLM observability tracing                   | imported by others |
-| `product-aliases.cjs` | Product name normalization (40+ aliases)    | imported by others |
+| Module                      | Purpose                                                            |
+| --------------------------- | ------------------------------------------------------------------ |
+| `farm-state.cjs`            | Cached Sheets data (auto-refresh 15min). `getState()`              |
+| `helpers.cjs`               | `parseNum, parseDate, fmtDate, fmtNum, rowsToObjects, daysBetween` |
+| `client-analytics.cjs`      | RFM scoring, churn detection. `analyzeClients()`                   |
+| `product-aliases.cjs`       | Product name normalization. `normalize()`                          |
+| `notification-throttle.cjs` | Anti-spam Telegram. `sendThrottled()`                              |
+| `langfuse-trace.cjs`        | LLM observability. `trace()`                                       |
+| `api-auth.cjs`              | Bearer token for Sheets API                                        |
+| `telegram-helper.cjs`       | Telegram send. `send(), sendReport()`                              |
+| `currency-updater.cjs`      | Blue Dollar rate. `getBlueRate()`                                  |
+| `n8n-client.cjs`            | n8n API client                                                     |
 
-## Daily Operations
+## Strategic Intelligence
 
-| Script                       | Purpose                              | Schedule        |
-| ---------------------------- | ------------------------------------ | --------------- |
-| `sync-telegram-to-sheets.js` | Telegram messages to Sheets          | _/15 _ \* \* \* |
-| `pepino-healthcheck.js`      | System health + auto-fix (14 checks) | _/30 _ \* \* \* |
-| `sync-dashboard.cjs`         | Grafana dashboard sync               | _/5 _ \* \* \*  |
-| `health-status.cjs`          | System health JSON                   | _/10 _ \* \* \* |
-| `llm-cost-report.cjs`        | LLM cost tracking                    | _/5 _ \* \* \*  |
-| `morning-brief.js`           | Morning dashboard + alerts           | 06:00 daily     |
-| `inventory-tracker.cjs`      | Stock alerts, days-of-stock          | 08:03 daily     |
-| `supplier-monitor.cjs`       | Raw material alerts, price changes   | 09:00 daily     |
-| `recalculate-aggregates.js`  | P&L + KPI aggregation                | 07:00, 20:30    |
-| `daily-dashboard-update.js`  | CEO Dashboard update                 | 07:00, 20:00    |
-| `data-completeness-check.js` | Data gaps reminder                   | 20:00 daily     |
-| `daily-pnl.cjs`              | P&L + margin alerts                  | 21:07 daily     |
-| `llm-cost-telegram.cjs`      | AI costs report                      | 22:00 daily     |
+| Script                   | Cron         | Description                                              |
+| ------------------------ | ------------ | -------------------------------------------------------- |
+| `task-brain.cjs`         | on-demand    | 8-dim task analysis, Eisenhower matrix, optimal day plan |
+| `planning-cycle.cjs`     | daily 19-20h | Evening/weekly/monthly planning + review                 |
+| `multiplier-planner.cjs` | Mon 06:30    | "7 tasks with 1 action" scoring                          |
+| `trip-optimizer.cjs`     | daily 05:45  | Smart delivery trip bundling                             |
+| `pepino-cli.cjs`         | CLI          | Unified entry point (33 commands)                        |
 
-## Client & Sales Intelligence
+## Pipelines
 
-| Script                  | Purpose                         | Schedule            |
-| ----------------------- | ------------------------------- | ------------------- |
-| `churn-detector.cjs`    | Client churn detection (>30d)   | 10:03 Mon-Fri       |
-| `client-outreach.cjs`   | CRM auto follow-up tasks        | 10:00 Tue, Fri      |
-| `auto-pricing.cjs`      | Cost-based pricing + L2 policy  | 12:07 Mon, Wed, Fri |
-| `competitive-intel.cjs` | Mercado Libre competitor prices | 11:00 Monday        |
-| `cashflow-forecast.cjs` | Cash flow forecast 7/30 days    | 18:00 Wednesday     |
+| Pipeline  | Cron      | Steps                                                 |
+| --------- | --------- | ----------------------------------------------------- |
+| `morning` | 06:00     | delivery → checklist → inventory → aggregates → brief |
+| `evening` | 20:30     | aggregates → P&L → gaps → LLM costs → alerts          |
+| `sunday`  | Sun 17:00 | waste → production → knowledge → CEO digest           |
 
-## Weekly Analytics & Planning
+## Business Analytics
 
-| Script                    | Purpose                            | Schedule     |
-| ------------------------- | ---------------------------------- | ------------ |
-| `production-planner.cjs`  | Weekly production plan + weather   | 17:00 Sunday |
-| `weekly-report.js`        | Weekly operations report           | 18:00 Friday |
-| `knowledge-distiller.cjs` | Business intelligence extraction   | 19:00 Sunday |
-| `ceo-weekly-digest.cjs`   | Unified CEO report                 | 20:00 Sunday |
-| `memory-maintenance.cjs`  | Memory cleanup + client enrichment | 03:00 Sunday |
+| Script                  | Cron      | Description                            |
+| ----------------------- | --------- | -------------------------------------- |
+| `daily-pnl.cjs`         | pipeline  | Revenue/expenses/margin, 7-day rolling |
+| `cashflow-forecast.cjs` | Wed 18:00 | 7/30-day forecast                      |
+| `margin-optimizer.cjs`  | 1st,15th  | Per-product/client margin analysis     |
+| `demand-predictor.cjs`  | Mon 07:00 | 4-week demand + client prediction      |
+| `ceo-weekly-digest.cjs` | pipeline  | Weekly executive summary               |
+| `waste-tracker.cjs`     | pipeline  | Production waste analysis              |
 
-## System Health & Self-Healing
+## Client Management
 
-| Script                 | Purpose                                           | Schedule        |
-| ---------------------- | ------------------------------------------------- | --------------- |
-| `self-healer.cjs`      | Auto-restart containers, disk/RAM/cron monitoring | _/30 _ \* \* \* |
-| `alert-aggregator.cjs` | Smart alert dedup + P1/P2/P3 priority batching    | 0 _/2 _ \* \*   |
+| Script                | Cron        | Description                       |
+| --------------------- | ----------- | --------------------------------- |
+| `churn-detector.cjs`  | daily 10:03 | At-risk/churned detection         |
+| `client-outreach.cjs` | Tue,Fri     | Auto follow-up tasks              |
+| `client-scorer.cjs`   | 1st,15th    | RFM scoring, growth opportunities |
 
-## Margin & Profitability
+## Operations
 
-| Script                 | Purpose                                           | Schedule         |
-| ---------------------- | ------------------------------------------------- | ---------------- |
-| `margin-optimizer.cjs` | Per-product/client profitability, recommendations | 1st+15th monthly |
-| `waste-tracker.cjs`    | Production waste analysis                         | 17:00 Friday     |
-
-## Interactive Tools (manual run)
-
-| Script                    | Purpose                    | Usage                                                           |
-| ------------------------- | -------------------------- | --------------------------------------------------------------- |
-| `telegram-commands.cjs`   | Quick status queries       | `node telegram-commands.cjs status\|stock\|clients\|sales\|pnl` |
-| `expense-quick-entry.cjs` | Fast expense logging       | `node expense-quick-entry.cjs "субстрат 5000"`                  |
-| `delivery-optimizer.cjs`  | Route optimization         | `node delivery-optimizer.cjs [--date YYYY-MM-DD]`               |
-| `people-import.cjs`       | Bulk client profile import | `node people-import.cjs`                                        |
-| `fix-client-names.cjs`    | Normalize client names     | `node fix-client-names.cjs`                                     |
-
-## Knowledge & Learning
-
-| Script                  | Purpose                    |
-| ----------------------- | -------------------------- |
-| `knowledge-import.cjs`  | Import knowledge articles  |
-| `knowledge-search.cjs`  | Search knowledge base      |
-| `article-knowledge.cjs` | Article extraction         |
-| `youtube-knowledge.cjs` | YouTube content extraction |
-
-## Grafana Dashboards
-
-| Script                          | Purpose                      |
-| ------------------------------- | ---------------------------- |
-| `create-ai-costs-dashboard.cjs` | Provision AI costs dashboard |
-| `create-farm-ops-dashboard.cjs` | Provision farm ops dashboard |
-| `pnl-reconciliation.cjs`        | P&L data reconciliation      |
-
-## Sheets API v2 Endpoints (port 4000)
-
-| Endpoint               | Method | Purpose                                |
-| ---------------------- | ------ | -------------------------------------- |
-| `/health`              | GET    | Health check (public, no auth)         |
-| `/sales?all=true`      | GET    | All sales data                         |
-| `/production?all=true` | GET    | All production data                    |
-| `/expenses?all=true`   | GET    | All expenses data                      |
-| `/inventory`           | GET    | Current stock                          |
-| `/clients`             | GET    | Client health (active/at_risk/churned) |
-| `/forecast`            | GET    | 7/30-day revenue forecast              |
-| `/waste`               | GET    | Production waste by product            |
-| `/dashboard`           | GET    | Compact summary for widgets            |
-| `/log/sales`           | POST   | Log a sale                             |
-| `/log/expense`         | POST   | Log an expense                         |
-| `/log/production`      | POST   | Log production                         |
-
-Query params: `?all=true` (no limit), `?limit=N`
-Auth: `Authorization: Bearer <token>` (token at `~/.openclaw/.sheets-api-token`)
+| Script                    | Cron        | Description                 |
+| ------------------------- | ----------- | --------------------------- |
+| `daily-ops-checklist.cjs` | pipeline    | Daily operations checklist  |
+| `delivery-optimizer.cjs`  | pipeline    | Route optimization          |
+| `inventory-tracker.cjs`   | pipeline    | Stock levels, alerts        |
+| `production-planner.cjs`  | pipeline    | Weekly production + weather |
+| `supplier-monitor.cjs`    | daily 09:00 | Raw material monitoring     |
+| `auto-pricing.cjs`        | Mon,Wed,Fri | Cost-based pricing          |
 
 ## Market Intelligence
 
-| Script                  | Purpose                              | Usage                                                             |
-| ----------------------- | ------------------------------------ | ----------------------------------------------------------------- |
-| `web-intel.cjs`         | Unified market research (5 commands) | `node web-intel.cjs prices\|suppliers\|competitors\|news\|report` |
-| `review-miner.cjs`      | ML review analysis + sentiment       | `node review-miner.cjs "query"` (1st monthly)                     |
-| `competitive-intel.cjs` | ML competitor price monitoring       | cron Monday 11:00                                                 |
+| Script                  | Cron        | Description              |
+| ----------------------- | ----------- | ------------------------ |
+| `competitive-intel.cjs` | Mon 11:00   | ML competitor monitoring |
+| `trend-radar.cjs`       | daily 07:45 | 5-stream intelligence    |
+| `ai-radar-report.cjs`   | Fri 16:00   | AI improvement proposals |
+| `web-intel.cjs`         | on-demand   | Market research tool     |
+| `review-miner.cjs`      | monthly     | ML review analysis       |
+
+## Infrastructure
+
+| Script                 | Cron      | Description                       |
+| ---------------------- | --------- | --------------------------------- |
+| `self-healer.cjs`      | \*/30     | Auto-fix containers, disk, memory |
+| `system-test.cjs`      | on-demand | 24 end-to-end tests               |
+| `alert-aggregator.cjs` | \*/2h     | Unified P1/P2/P3 alerts           |
 
 ## Knowledge Layer
 
-| Script                    | Purpose                         | Schedule    |
-| ------------------------- | ------------------------------- | ----------- |
-| `vault-organizer.cjs`     | Organize vault by 8 domains     | manual      |
-| `knowledge-indexer.cjs`   | FTS index (70 docs, 761 chunks) | 04:00 daily |
-| `knowledge-retriever.cjs` | Domain-filtered search          | on-demand   |
-
-## Architecture
-
-```
-Telegram → sync-telegram-to-sheets.js → Google Sheets (SSOT)
-                                              ↓
-                                    Cron scripts (read)
-                                              ↓
-                              Telegram reports + Grafana + Langfuse
-```
+| Script                    | Cron        | Description                              |
+| ------------------------- | ----------- | ---------------------------------------- |
+| `knowledge-indexer.cjs`   | daily 04:00 | Build search index (70 docs, 761 chunks) |
+| `knowledge-retriever.cjs` | on-demand   | Domain-filtered search                   |
+| `vault-organizer.cjs`     | on-demand   | Organize memory by domain                |
