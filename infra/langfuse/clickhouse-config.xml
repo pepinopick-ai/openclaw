@@ -1,0 +1,17 @@
+<clickhouse>
+    <!-- Memory limits for low-RAM VPS -->
+    <max_server_memory_usage_to_ram_ratio>0.5</max_server_memory_usage_to_ram_ratio>
+    <max_server_memory_usage>500000000</max_server_memory_usage>
+
+    <!-- Reduce background merge threads to save memory -->
+    <background_pool_size>2</background_pool_size>
+    <background_merges_mutations_concurrency_ratio>1</background_merges_mutations_concurrency_ratio>
+    <background_schedule_pool_size>2</background_schedule_pool_size>
+
+    <!-- Reduce mark cache to save memory -->
+    <mark_cache_size>268435456</mark_cache_size>
+    <uncompressed_cache_size>0</uncompressed_cache_size>
+
+    <!-- Limit concurrent queries -->
+    <max_concurrent_queries>20</max_concurrent_queries>
+</clickhouse>

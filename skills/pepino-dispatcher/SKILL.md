@@ -15,6 +15,29 @@ metadata:
 
 ---
 
+## Governance Layer (pepino-core v2)
+
+**Перед выполнением ЛЮБОГО кейса** — сверяйся с:
+
+- `pepino-core/ENTITIES.md` — канонические схемы сущностей (SKU, Customer, Supplier, CropBatch, SalesOrder, Expense, Task, Alert, CashEvent, GreenhouseBlock, Decision)
+- `pepino-core/AGENT_REGISTRY.md` — реестр агентов, capabilities, SLA, лимиты
+- `pepino-core/POLICY_ENGINE.md` — 5 уровней действий (L0-L4), матрица одобрений
+- `pepino-core/STATE_MACHINE.md` — жизненный цикл кейса (created→triaged→planned→approved→in_progress→done→verified→archived)
+- `pepino-core/LEARNING_LOOP.md` — post-decision review, quality metrics, red-team сценарии
+- `pepino-core/MEMORY_SYSTEM.md` — 4 типа памяти (working, episodic, semantic, procedural)
+- `pepino-core/EVAL_SUITE.md` — 50 тест-кейсов для валидации системы
+
+**Правила:**
+
+1. Все данные MUST соответствовать canonical entity schemas из ENTITIES.md
+2. Все действия MUST проходить через policy levels из POLICY_ENGINE.md
+3. Все кейсы MUST следовать state transitions из STATE_MACHINE.md
+4. Значимые кейсы (severity ≥2, amount ≥100K ARS) MUST генерировать post-decision review по LEARNING_LOOP.md
+5. При принятии решений о клиентах/продуктах — MUST читать semantic memory из MEMORY_SYSTEM.md
+6. Инциденты и значимые решения MUST записываться в episodic memory
+
+---
+
 ## Обязательный протокол для каждого запроса
 
 ```
@@ -242,6 +265,29 @@ metadata:
 
 ---
 
+### 💲 КОНКУРЕНТНЫЙ АНАЛИЗ ЦЕН (Pricing Analysis)
+
+**Триггеры:** анализ цен, цены конкурентов, мониторинг цен, pricing, сколько стоит на рынке, конкурентные цены, ценовой анализ, сравнить наши цены, наши цены vs рынок, рыночный анализ цен
+
+→ **`pepino-profit-engine`** (Режим 6 — Competitive Pricing Analysis)
+→ Данные рынка: **`mercadolibre-analyst`** + скрипт `node skills/pepino-google-sheets/auto-pricing.cjs`
+→ Если нужна запись в Sheets → добавить **`pepino-google-sheets`**
+
+**Комплексные сценарии:**
+
+| Запрос                                         | Навыки                                                    | Режим            |
+| ---------------------------------------------- | --------------------------------------------------------- | ---------------- |
+| "Анализ цен конкурентов"                       | `pepino-profit-engine` (режим 6)                          | одиночный        |
+| "Сколько стоит вешенка на рынке?"              | `mercadolibre-analyst` → `pepino-profit-engine` (режим 6) | последовательный |
+| "Сравни наши цены с рынком и дай рекомендации" | `pepino-profit-engine` (режим 6) + `pepino-google-sheets` | последовательный |
+| "Мониторинг цен + прогноз спроса"              | `pepino-profit-engine` (режим 6) + `pepino-demand-oracle` | параллельный     |
+
+**Guardrail:** Никогда не менять цены автоматически. Только рекомендации. Изменение цены → APPROVAL_REQUIRED.
+
+**case_id suffix:** `-PRC`
+
+---
+
 ### 🇨🇳 ПОСТАВЩИКИ — ALIBABA
 
 **Триггеры:** alibaba, алибаба, поставщик Китай, MOQ, оптовая цена, sourcing, найти оборудование в Китае, импорт
@@ -285,6 +331,22 @@ metadata:
 → Обзор данных: добавить **`pepino-weekly-review`**
 
 **case_id suffix:** `-CEO`
+
+---
+
+### 🧘 ЛИЧНЫЙ КОУЧИНГ CEO (Personal Coach)
+
+**Триггеры:** устал, выгорание, burnout, не могу сфокусироваться, слишком много задач, мотивация, рефлексия, стресс, баланс, энергия, фокус, ментор, коуч, привычки, как расти, перегружен, overwhelm, habit tracker, колесо баланса, навык недели, рефлексия за неделю, energy audit, личный обзор, сомневаюсь в себе
+
+→ **`pepino-ceo-coach`** — энергия, фокус, привычки, рост, баланс работа/жизнь, менторство
+
+**Разграничение с pepino-shadow-ceo:**
+
+- Если запрос про ОПЕРАЦИОННЫЙ ритм, decision guardrails, KPI, delegation map → `pepino-shadow-ceo`
+- Если запрос про ЛИЧНОЕ состояние (энергия, стресс, привычки, рост, баланс) → `pepino-ceo-coach`
+- При совпадении (например "устал") → `pepino-ceo-coach` первый, затем `pepino-shadow-ceo` для fatigue score
+
+**case_id suffix:** `-CCH`
 
 ---
 
@@ -391,6 +453,43 @@ metadata:
 
 ---
 
+### 🎬 YOUTUBE KNOWLEDGE (Видео-источники)
+
+**Триггеры:** добавь видео, youtube, сохрани видео, запомни видео, видео по теме, ютуб, видеоурок, посмотрел видео, нашёл видео, youtube.com, youtu.be
+
+→ **`pepino-knowledge`** (Режим 8 — YouTube Source Processing)
+→ Скрипт: `node skills/pepino-google-sheets/youtube-knowledge.cjs auto <URL> [title]`
+→ При релевантной теме → NotebookLM анализ через MCP
+
+**case_id suffix:** `-KNW`
+
+---
+
+### 📰 ARTICLE KNOWLEDGE (Статьи и PDF)
+
+**Триггеры:** сохрани статью, добавь статью, запомни ссылку, article, нашёл статью, интересная статья, PDF, исследование, paper, сохрани ссылку, запомни материал, добавь в источники
+
+→ **`pepino-knowledge`** (Режим 9 — Article Source Processing)
+→ Скрипт: `node skills/pepino-google-sheets/article-knowledge.cjs auto <URL> [title] [--tags t1,t2]`
+→ При релевантной теме → NotebookLM анализ через MCP
+
+**case_id suffix:** `-KNW`
+
+---
+
+### 🔍 ПОИСК ПО БАЗЕ ЗНАНИЙ (Knowledge Query)
+
+**Триггеры:** что мы знаем, найди информацию, какие решения, есть ли SOP, покажи инсайты, история вопроса, что известно о, собери всё по теме, поиск по знаниям, что у нас есть про, напомни что мы решали
+
+→ **`pepino-knowledge`** (режим Knowledge Search) — полнотекстовый поиск по pepino-graph, Obsidian vault, операционным данным Sheets
+→ Скрипт поиска: `node knowledge-search.cjs "<ключевые слова>"`
+
+**Отличие от Режима 3 (Decision Archive):** Knowledge Query ищет по ВСЕМ репозиториям знаний одновременно (граф сущностей, Obsidian, Sheets), а не только по архиву решений.
+
+**case_id suffix:** `-KNW`
+
+---
+
 ### 🍽️ ШЕФЫ И ДЕГУСТАЦИИ
 
 **Триггеры:** шеф, шеф-повар, дегустация, тастинг, сенсорный профиль, коллаборация, chef, вкус продукта, отзыв шефа, гастро, chef PR, упоминание в меню, рецепт шефа, приглашение шефа, chef network, ambassador
@@ -418,6 +517,25 @@ metadata:
 → **`pepino-risk`** — реестр рисков, EWI мониторинг, кризисные сценарии, ежеквартальный аудит
 
 **case_id suffix:** `-RSK`
+
+---
+
+### 📦 PRODUCT MANAGEMENT (Управление продуктами)
+
+**Триггеры:** продукт, SKU, ассортимент, запуск продукта, roadmap, портфель продуктов, unit economics, GTM, go to market, какой продукт, новый продукт, убрать продукт, жизненный цикл, каннибализация, бандл, ценовая эластичность, линейка продуктов, оптимизация SKU, product portfolio
+
+→ **`pepino-product-manager`** — портфельный анализ, GTM launch, roadmap, SKU optimization, конкурентная разведка
+
+**Комплексные сценарии:**
+
+| Запрос                    | Навыки                                                                            | Режим            |
+| ------------------------- | --------------------------------------------------------------------------------- | ---------------- |
+| "Запусти новый продукт X" | `pepino-product-manager` (GTM) + `pepino-innovation-lab` + `pepino-profit-engine` | последовательный |
+| "Какой продукт убрать?"   | `pepino-product-manager` (Portfolio) + `pepino-profit-engine` (Kill review)       | параллельный     |
+| "Roadmap на Q2"           | `pepino-product-manager` (Roadmap) + `pepino-demand-oracle`                       | последовательный |
+| "Что есть у конкурентов?" | `pepino-product-manager` (Competitive) + `mercadolibre-analyst`                   | параллельный     |
+
+**case_id suffix:** `-PDM`
 
 ---
 
@@ -568,21 +686,29 @@ case_id: [CASE-XXX]
 
 ## Комплексные сценарии
 
-| Запрос                                      | Навыки                                                                       | Режим                                |
-| ------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------ |
-| "Рассчитай маржу и сравни с ценами на ML"   | `greenhouse-finance` + `mercadolibre-analyst`                                | параллельно                          |
-| "Запиши урожай и обнови KPI"                | `greenhouse-agronomy` + `pepino-google-sheets`                               | последовательно                      |
-| "Найди поставщика субстрата и сравни цены"  | `alibaba-analyst` + `parallel-research`                                      | параллельно                          |
-| "Напиши КП и сохрани клиента в таблицу"     | `greenhouse-sales` + `pepino-google-sheets`                                  | последовательно                      |
-| "Итоги недели"                              | `greenhouse-finance` + `greenhouse-agronomy` + `greenhouse-management`       | параллельно → `pepino-google-sheets` |
-| "Оцени новую площадку"                      | `pepino-realtor` + `pepino-finance-tools` + `greenhouse-engineering`         | рабочая группа                       |
-| "Настрой авто-мониторинг цен ML"            | `mercadolibre-analyst` + `greenhouse-automation`                             | последовательно                      |
-| "Сравни 3 поставщика мицелия"               | `parallel-research` + `alibaba-analyst`                                      | параллельно                          |
-| "Проблема с партией продукции"              | `greenhouse-agronomy` + `pepino-qa-food-safety` + `greenhouse-logistics`     | рабочая группа                       |
-| "Пора ли поднять цены?"                     | `pepino-argentina-finance` + `mercadolibre-analyst` + `pepino-finance-tools` | параллельно                          |
-| "Что делать с лишними 20 кг вешенки?"       | `pepino-innovation-lab` + `greenhouse-finance`                               | последовательно                      |
-| "CEO briefing + итоги недели"               | `pepino-shadow-ceo` + `pepino-weekly-review`                                 | параллельно                          |
-| "Хочу попробовать Tsitsak — как запустить?" | `pepino-innovation-lab` + `greenhouse-agronomy`                              | последовательно                      |
+| Запрос                                      | Навыки                                                                            | Режим                                |
+| ------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------ |
+| "Рассчитай маржу и сравни с ценами на ML"   | `greenhouse-finance` + `mercadolibre-analyst`                                     | параллельно                          |
+| "Запиши урожай и обнови KPI"                | `greenhouse-agronomy` + `pepino-google-sheets`                                    | последовательно                      |
+| "Найди поставщика субстрата и сравни цены"  | `alibaba-analyst` + `parallel-research`                                           | параллельно                          |
+| "Напиши КП и сохрани клиента в таблицу"     | `greenhouse-sales` + `pepino-google-sheets`                                       | последовательно                      |
+| "Итоги недели"                              | `greenhouse-finance` + `greenhouse-agronomy` + `greenhouse-management`            | параллельно → `pepino-google-sheets` |
+| "Оцени новую площадку"                      | `pepino-realtor` + `pepino-finance-tools` + `greenhouse-engineering`              | рабочая группа                       |
+| "Настрой авто-мониторинг цен ML"            | `mercadolibre-analyst` + `greenhouse-automation`                                  | последовательно                      |
+| "Сравни 3 поставщика мицелия"               | `parallel-research` + `alibaba-analyst`                                           | параллельно                          |
+| "Проблема с партией продукции"              | `greenhouse-agronomy` + `pepino-qa-food-safety` + `greenhouse-logistics`          | рабочая группа                       |
+| "Пора ли поднять цены?"                     | `pepino-argentina-finance` + `mercadolibre-analyst` + `pepino-finance-tools`      | параллельно                          |
+| "Что делать с лишними 20 кг вешенки?"       | `pepino-innovation-lab` + `greenhouse-finance`                                    | последовательно                      |
+| "CEO briefing + итоги недели"               | `pepino-shadow-ceo` + `pepino-weekly-review`                                      | параллельно                          |
+| "Хочу попробовать Tsitsak — как запустить?" | `pepino-innovation-lab` + `greenhouse-agronomy`                                   | последовательно                      |
+| "Что мы знаем о вешенке?"                   | `pepino-knowledge` (Knowledge Search)                                             | одиночный                            |
+| "Собери всё по ценообразованию"             | `pepino-knowledge` (Knowledge Search + --include-sheets)                          | одиночный                            |
+| "Сохрани статью https://..."                | `pepino-knowledge` (Article Source Processing)                                    | одиночный                            |
+| "Нашёл исследование по VPD"                 | `pepino-knowledge` (Article Source Processing) + NotebookLM                       | последовательно                      |
+| "Покажи портфель продуктов"                 | `pepino-product-manager` (Portfolio Dashboard)                                    | одиночный                            |
+| "Запусти новый продукт X"                   | `pepino-product-manager` (GTM) + `pepino-innovation-lab` + `pepino-profit-engine` | последовательный                     |
+| "Roadmap на Q2"                             | `pepino-product-manager` (Roadmap) + `pepino-demand-oracle`                       | последовательный                     |
+| "Слишком много SKU?"                        | `pepino-product-manager` (SKU Optimization)                                       | одиночный                            |
 
 ---
 
@@ -632,3 +758,57 @@ case_id: [CASE-XXX]
 ```
 
 Не объясняй долго — сразу выдавай case_id и запускай навыки.
+
+---
+
+## LLM Model Routing (автоматический выбор модели)
+
+Диспетчер автоматически определяет оптимальную LLM-модель для каждого кейса.
+
+### Классификация Tier
+
+| Tier        | Описание                    | Модель по умолчанию         | Стоимость     |
+| ----------- | --------------------------- | --------------------------- | ------------- |
+| T1 Simple   | Ввод данных, lookup, формат | Gemini Flash / GPT-4o-mini  | $0.002/задача |
+| T2 Medium   | Анализ, отчёты, контент     | DeepSeek V3 / Kimi K2.5     | $0.02/задача  |
+| T3 Complex  | Стратегия, моделирование    | Claude Sonnet / GPT-4o      | $0.10/задача  |
+| T4 Critical | Юридика, аудит, release     | Claude Sonnet + верификация | $0.40/задача  |
+
+### Правила маршрутизации
+
+1. **По скиллу:** каждый скилл имеет tier по умолчанию (см. таблицу ниже)
+2. **По intent:** сложные intent-ы повышают tier
+3. **По промпту:** длинные промпты (>3000 токенов) → минимум T2, keyword detection
+4. **Hard override:** скиллы из T4 (qa-food-safety, legal) ВСЕГДА используют premium
+5. **Cascading:** если T1/T2 модель не справилась → автоэскалация на следующий tier
+
+### Скиллы по Tier
+
+**Tier 1 (Simple):** pepino-google-sheets, pepino-maps-tools, pepino-finance-tools (курсы), pepino-team-ops (простые), pepino-knowledge (поиск)
+
+**Tier 2 (Medium):** pepino-sales-crm, pepino-procurement, pepino-brand, pepino-demand-oracle, pepino-controller, pepino-weekly-review, pepino-climate-guard, pepino-risk, pepino-argentina-finance, pepino-profit-engine, pepino-agro-ops, pepino-fermentation, pepino-chef-network, pepino-product-manager (Portfolio/SKU)
+
+**Tier 3 (Complex):** pepino-shadow-ceo, pepino-ceo-coach, pepino-financial-modeling, pepino-innovation-lab, pepino-capital, pepino-realtor, pepino-greenhouse-tech, pepino-product-manager (GTM/Roadmap/Competitive)
+
+**Tier 4 (Critical):** pepino-qa-food-safety, pepino-legal
+
+### Case ID с Tier
+
+Формат case_id расширяется: `CASE-YYYYMMDD-[INTENT]-T[1-4]`
+Пример: `CASE-20260320-AGR-T1`, `CASE-20260320-FIN-T3`
+
+### Инструмент
+
+Классификация: `node /home/roman/openclaw/skills/pepino-google-sheets/llm-router.cjs classify --skill <name> --intent <type> --prompt "<text>"`
+Отчёт: `node /home/roman/openclaw/skills/pepino-google-sheets/llm-router.cjs report`
+Симуляция: `node /home/roman/openclaw/skills/pepino-google-sheets/llm-router.cjs simulate`
+
+### KPI маршрутизации
+
+| KPI                          | Цель     |
+| ---------------------------- | -------- |
+| Cost per task                | < $0.025 |
+| Cheap pass rate (T1 success) | > 85%    |
+| Escalation rate              | < 15%    |
+| Premium share (T3+T4)        | < 12%    |
+| Monthly budget               | < $80    |

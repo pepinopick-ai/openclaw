@@ -323,9 +323,44 @@ AI PLATFORM HEALTH:
 
 ---
 
-## Реестр моделей — Routing Guide
+## Реестр моделей — 4-Tier Routing System
 
-Система использует 4 уровня провайдеров. Выбор по умолчанию:
+Система использует 4 tier-а маршрутизации (управляется через `llm-router.cjs`):
+
+| Tier        | Описание                    | Модель по умолчанию         | Стоимость     | Risk Level |
+| ----------- | --------------------------- | --------------------------- | ------------- | ---------- |
+| T1 Simple   | Ввод данных, lookup, формат | Gemini Flash / GPT-4o-mini  | $0.002/задача | LOW        |
+| T2 Medium   | Анализ, отчёты, контент     | DeepSeek V3 / Kimi K2.5     | $0.02/задача  | MEDIUM     |
+| T3 Complex  | Стратегия, моделирование    | Claude Sonnet / GPT-4o      | $0.10/задача  | HIGH       |
+| T4 Critical | Юридика, аудит, release     | Claude Sonnet + верификация | $0.40/задача  | CRITICAL   |
+
+### Инструменты маршрутизации и отчётности
+
+| Инструмент    | Путь                                                                     | Назначение                       |
+| ------------- | ------------------------------------------------------------------------ | -------------------------------- |
+| LLM Router    | `/home/roman/openclaw/skills/pepino-google-sheets/llm-router.cjs`        | Классификация tier, выбор модели |
+| Cost Report   | `/home/roman/openclaw/skills/pepino-google-sheets/llm-cost-report.cjs`   | Генерация отчёта расходов в JSON |
+| Cost Telegram | `/home/roman/openclaw/skills/pepino-google-sheets/llm-cost-telegram.cjs` | Ежедневный отчёт в Telegram      |
+| Grafana       | Dashboard `pepino-ai-costs`                                              | Визуализация расходов            |
+
+### Cost Tracking
+
+Все вызовы LLM логируются в `/home/roman/logs/llm-costs.jsonl` (JSONL-формат, одна строка на вызов):
+
+```json
+{
+  "ts": "2026-03-20T22:00:00Z",
+  "skill": "pepino-agro-ops",
+  "tier": "T2",
+  "model": "deepseek_v3",
+  "tokens_in": 1200,
+  "tokens_out": 800,
+  "cost_usd": 0.018,
+  "case_id": "CASE-20260320-AGR-T2"
+}
+```
+
+### Fallback-таблица по tier (legacy совместимость)
 
 | Risk Level | Первый выбор               | Второй                          | Fallback        |
 | ---------- | -------------------------- | ------------------------------- | --------------- |

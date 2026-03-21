@@ -1,6 +1,6 @@
 ---
 name: pepino-knowledge
-description: "📚 База знаний Pepino Pick — СОПы, уроки, архив решений, захват знаний, поиск по базе, Obsidian интеграция. Авто-вызывай при словах найди СОП, добавь в базу знаний, уроки из прошлого, что мы делали раньше, архив решений, запомни это, создай инструкцию, поиск по базе, knowledge base, СОП, регламент, Obsidian."
+description: "📚 База знаний Pepino Pick — СОПы, уроки, архив решений, захват знаний, поиск по базе, knowledge search, Obsidian интеграция. Авто-вызывай при словах найди СОП, добавь в базу знаний, уроки из прошлого, что мы делали раньше, архив решений, запомни это, создай инструкцию, поиск по базе, knowledge base, СОП, регламент, Obsidian, что мы знаем, найди информацию, покажи инсайты, история вопроса, какие решения."
 homepage: https://pepino.pick
 metadata:
   openclaw:
@@ -18,7 +18,7 @@ metadata:
 
 ---
 
-## 5 режимов
+## 7 режимов
 
 ### Режим 1 — SOP Library (Библиотека регламентов)
 
@@ -374,6 +374,215 @@ nblm_generate_brief(topic, [questions]) → полный research brief
 - Простой вопрос без источников
 
 **Auth статус:** ✅ Connected — cookies: `/home/roman/.notebooklm/storage_state.json`, auto-refresh: пон 08:50 (`/home/roman/refresh-notebooklm-cookies.sh`)
+
+---
+
+### Режим 7 — Knowledge Search (Полнотекстовый поиск по всем знаниям)
+
+Когда пользователь спрашивает "что мы знаем о X", "найди информацию о Y", "какие решения мы принимали по Z", "есть ли SOP для...", "покажи инсайты по...", "история вопроса":
+
+**Протокол:**
+
+```
+ШАГ 1: Извлечь ключевые слова из запроса
+  → Убрать стоп-слова, оставить предметные термины
+  → Пример: "что мы знаем о вешенке и марже" → keywords: ["вешенка", "маржа"]
+
+ШАГ 2: Запустить knowledge-search.cjs
+  → node /home/roman/openclaw/skills/pepino-google-sheets/knowledge-search.cjs "<keywords>"
+  → Для включения Sheets данных: добавить --include-sheets
+  → Скрипт ищет по: pepino-graph, pepino-obsidian, (опц.) Google Sheets API
+
+ШАГ 3: Прочитать top 3-5 файлов из результатов
+  → Использовать Read tool для каждого файла из results[].file
+  → Обратить внимание на type результата (decision, sop, lesson, insight, entity)
+
+ШАГ 4: Синтезировать ответ с цитатами
+  → Каждый факт сопровождать ссылкой: [source: filename]
+  → Группировать по типу: решения, СОПы, уроки, инсайты
+  → Формат ответа:
+
+    📚 KNOWLEDGE SEARCH: "<исходный запрос>"
+    Найдено: [N] результатов в [источники]
+
+    ### Решения
+    - [факт] [source: decision_memo__finance__pricing__v1.md]
+
+    ### СОПы
+    - [факт] [source: SOP-AGR-002]
+
+    ### Инсайты и уроки
+    - [факт] [source: insight__market__premium_trend.md]
+
+    ### Операционные данные
+    - [факт] [source: sheets://kpi]
+
+ШАГ 5: Если результатов 0
+  → Сообщить: "По запросу '<keywords>' ничего не найдено в базе знаний."
+  → Предложить: "Создать заметку-инсайт по этой теме? (Режим 4 — Knowledge Capture)"
+  → Предложить: "Запустить research через NotebookLM? (Режим 6)"
+```
+
+**Источники поиска:**
+
+| Источник        | Путь                                         | Содержимое                                     |
+| --------------- | -------------------------------------------- | ---------------------------------------------- |
+| pepino-graph    | `~/.openclaw/workspace/memory/pepino-graph/` | Сущности, связи, инсайты, решения, СОПы        |
+| pepino-obsidian | `~/pepino-obsidian/`                         | Decision memos, lessons, postmortems, research |
+| Google Sheets   | `localhost:4000` (флаг `--include-sheets`)   | KPI, алерты, продажи                           |
+
+**Примеры запросов:**
+
+```
+"что мы знаем о вешенке"            → keywords: вешенка
+"найди информацию о поставщике X"   → keywords: поставщик, X
+"какие решения по ценообразованию"  → keywords: решения, ценообразование, цена
+"есть ли SOP для сбора урожая"      → keywords: sop, сбор, урожай
+"покажи инсайты по рынку"           → keywords: инсайт, рынок
+"история вопроса по субстрату"      → keywords: субстрат
+```
+
+---
+
+### Режим 8 — YouTube Source Processing (Видео-pipeline)
+
+Автоматическая обработка YouTube-видео как источников знаний для Pepino Pick.
+
+**Триггеры:** "добавь видео", "youtube", "сохрани видео", "запомни видео", YouTube URL в сообщении.
+
+**Скрипт:** `node ~/openclaw/skills/pepino-google-sheets/youtube-knowledge.cjs auto <URL> [title] [--tags t1,t2]`
+
+**Pipeline (полный цикл):**
+
+```
+ШАГ 1: Получить YouTube URL из сообщения пользователя
+  → Извлечь video_id (youtube.com/watch?v=, youtu.be/, shorts/)
+  → Определить title (из аргумента, из HTML <title>, или fallback)
+
+ШАГ 2: Создать source-файл
+  → Запустить: node youtube-knowledge.cjs auto "<URL>" "<title>" --tags <теги>
+  → Файл: ~/.openclaw/workspace/memory/pepino-graph/05-sources/youtube/
+  → Формат имени: YYYY-MM-DD__youtube__slug.md
+  → MANIFEST.md обновляется автоматически
+
+ШАГ 3: Оценить релевантность для NotebookLM
+  → Тема агрономии/теплицы → nblm_use_notebook("pepino-agronomy-research")
+  → Тема рынка/ресторанов → nblm_use_notebook("pepino-market-intel")
+  → Тема регуляторики → nblm_use_notebook("pepino-regulatory")
+  → Общая/обучающая тема → пропустить NotebookLM, оставить pending
+
+ШАГ 4 (если NotebookLM релевантен):
+  → nblm_add_source_url("<URL>")
+  → nblm_get_summary()
+  → Обновить секцию "Summary" в source-файле
+  → Заполнить "Key Points" из summary
+  → Предложить "Actions" и "SOP Patches" на основе контента
+
+ШАГ 5: Подтвердить результат пользователю
+  → Вывести путь к файлу
+  → Указать статус NotebookLM (обработан / pending)
+  → Если есть actionable items — предложить создать задачи
+```
+
+**Расширенный шаблон source-файла (auto):**
+
+Файл содержит секции:
+
+- **Summary** -- краткое содержание (из NotebookLM или вручную)
+- **Key Points** -- ключевые тезисы видео
+- **Applicable to Pepino Pick** -- что применимо к нашему хозяйству
+- **Actions** -- конкретные действия для внедрения
+- **SOP Patches** -- какие СОПы обновить/создать
+- **Related Entities** -- связи с pepino-graph
+
+**Примеры команд пользователя:**
+
+```
+Добавь видео https://youtube.com/watch?v=abc123
+Сохрани видео: https://youtu.be/xyz789 "Выращивание огурцов зимой"
+Запомни видео по теме огурцов https://youtube.com/watch?v=def456
+```
+
+**Теги (рекомендуемые):** огурцы, теплица, агрономия, грибы, субстрат, климат, бизнес, маркетинг, упаковка, ферментация
+
+---
+
+### Режим 9 — Article Source Processing (Статьи и PDF)
+
+Автоматическая обработка веб-статей и PDF-документов как источников знаний для Pepino Pick.
+
+**Триггеры:** "сохрани статью", "добавь статью", "запомни ссылку", "article", "нашёл статью", "PDF", "исследование", "paper", URL статьи или PDF в сообщении.
+
+**Скрипт:** `node ~/openclaw/skills/pepino-google-sheets/article-knowledge.cjs auto <URL> [title] [--tags t1,t2]`
+
+**Pipeline (полный цикл):**
+
+```
+ШАГ 1: Получить URL из сообщения пользователя
+  -> Определить тип: article (HTML) или pdf
+  -> Определить title (из аргумента, из HTML <title>, или fallback)
+  -> Извлечь домен для метаданных
+
+ШАГ 2: Создать source-файл
+  -> Запустить: node article-knowledge.cjs auto "<URL>" "<title>" --tags <теги>
+  -> Файл: ~/.openclaw/workspace/memory/pepino-graph/05-sources/articles/
+  -> Формат имени: YYYY-MM-DD__article__slug.md (или YYYY-MM-DD__pdf__slug.md)
+  -> MANIFEST.md обновляется автоматически
+
+ШАГ 3: Оценить релевантность для NotebookLM
+  -> Тема агрономии/теплицы -> nblm_use_notebook("pepino-agronomy-research")
+  -> Тема рынка/ресторанов -> nblm_use_notebook("pepino-market-intel")
+  -> Тема регуляторики/SENASA -> nblm_use_notebook("pepino-regulatory")
+  -> Тема поставщиков/DD -> nblm_use_notebook("pepino-supplier-dd")
+  -> Общая/обучающая тема -> пропустить NotebookLM, оставить pending
+
+ШАГ 4 (если NotebookLM релевантен):
+  -> nblm_add_source_url("<URL>")
+  -> nblm_get_summary()
+  -> Обновить секцию "Summary" в source-файле
+  -> Заполнить "Key Points" из summary
+  -> Предложить "Actions" и "SOP Patches" на основе контента
+
+ШАГ 5: Маршрутизация (Route)
+  -> Если есть actionable insight -> создать заметку в pepino-graph/03-insights/
+  -> Если market intel -> сохранить в pepino-obsidian/11_market_intel/
+  -> Если урок/рецепт -> сохранить в pepino-obsidian/06_lessons_learned/
+
+ШАГ 6: Подтвердить результат пользователю
+  -> Вывести путь к файлу
+  -> Указать статус NotebookLM (обработан / pending)
+  -> Если есть actionable items -> предложить создать задачи
+```
+
+**Расширенный шаблон source-файла (auto):**
+
+Файл содержит секции:
+
+- **Summary** -- краткое содержание (из NotebookLM или вручную)
+- **Key Points** -- ключевые тезисы статьи
+- **Applicable to Pepino Pick** -- что применимо к нашему хозяйству
+- **Actions** -- конкретные действия для внедрения
+- **SOP Patches** -- какие СОПы обновить/создать
+- **Related Entities** -- связи с pepino-graph
+- **Route** -- куда маршрутизировать инсайты (pepino-graph, pepino-obsidian)
+
+**Отличие от Режим 8 (YouTube):**
+
+- Поддерживает как HTML-статьи, так и PDF-документы
+- Автоматическое определение типа по URL (\*.pdf, /pdf/ -> PDF)
+- Извлечение домена для группировки по источникам
+- Секция Route для маршрутизации инсайтов
+
+**Примеры команд пользователя:**
+
+```
+Сохрани статью https://example.com/greenhouse-guide
+Добавь статью: https://sciencedirect.com/article.pdf "Cucumber Growth Optimization"
+Запомни ссылку https://medium.com/@farm/hydroponics-tips --tags агрономия,гидропоника
+Нашёл исследование по VPD: https://journals.org/vpd-study.pdf
+```
+
+**Теги (рекомендуемые):** огурцы, теплица, агрономия, грибы, субстрат, климат, бизнес, маркетинг, упаковка, ферментация, VPD, гидропоника, исследование, PDF
 
 ---
 

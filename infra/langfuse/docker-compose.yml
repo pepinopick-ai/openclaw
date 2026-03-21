@@ -1,0 +1,169 @@
+# Langfuse v3 — LLM observability для Pepino Pick Agent OS
+# Port: 3001 (Grafana on 3000)
+# Stack: web + worker + postgres + clickhouse + redis + minio
+# Memory-optimized for 8GB VPS with other services running
+# Deploy: docker compose up -d
+
+services:
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:3
+    restart: unless-stopped
+    depends_on: &langfuse-deps
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment: &langfuse-env
+      DATABASE_URL: ${DATABASE_URL}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      SALT: ${SALT}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      # ClickHouse
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      # Redis
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: ${REDIS_AUTH}
+      # MinIO (S3-compatible storage)
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+      # Init (first boot only)
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:3
+    restart: unless-stopped
+    depends_on: *langfuse-deps
+    environment:
+      <<: *langfuse-env
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  langfuse-postgres:
+    image: docker.io/postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: langfuse
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - langfuse-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  langfuse-clickhouse:
+    image: docker.io/clickhouse/clickhouse-server
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - langfuse-ch-data:/var/lib/clickhouse
+      - langfuse-ch-logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  langfuse-redis:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    command: >
+      --requirepass ${REDIS_AUTH}
+      --maxmemory 64mb
+      --maxmemory-policy noeviction
+    volumes:
+      - langfuse-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+
+  langfuse-minio:
+    image: cgr.dev/chainguard/minio
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - langfuse-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+volumes:
+  langfuse-pg-data:
+  langfuse-ch-data:
+  langfuse-ch-logs:
+  langfuse-redis-data:
+  langfuse-minio-data:
