@@ -60,6 +60,9 @@ normalize("Свежий огурец"); // -> "Огурец"
 - All include Langfuse tracing via langfuse-trace.cjs
 - Telegram thread 20 = Director/Strategy topic
 - Product names MUST be normalized via product-aliases.cjs
+- Use helpers.cjs for parseNum/parseDate/fmtDate/rowsToObjects (don't duplicate)
+- Use client-analytics.cjs for any client analysis (don't reimplement)
+- Use farm-state.cjs for reading data (don't call readSheet directly)
 
 ## File Naming
 

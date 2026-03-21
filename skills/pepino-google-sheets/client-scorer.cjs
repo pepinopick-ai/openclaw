@@ -2,14 +2,9 @@
 /**
  * Pepino Pick -- Client Health Scorer & Growth Opportunities
  *
- * Комплексная оценка здоровья клиентов (0-100) на основе RFM-анализа:
- *   - Recency (30 pts): давность последнего заказа
- *   - Frequency (30 pts): частота заказов в месяц
- *   - Monetary (30 pts): общая выручка
- *   - Growth (10 pts): тренд размера заказов
- *
- * Классификация по tier-ам: A (VIP), B (Core), C (Develop), D (At Risk)
- * Выявление возможностей: cross-sell, upsell, win-back
+ * Комплексная оценка здоровья клиентов (0-100) на основе RFM-анализа.
+ * Использует shared модуль client-analytics.cjs для скоринга.
+ * Добавляет: выявление возможностей роста (cross-sell, upsell, win-back).
  *
  * Результаты записываются в лист "Клиенты" и отправляются в Telegram.
  *
@@ -21,6 +16,9 @@
 
 const https = require("https");
 const { trace } = require("./langfuse-trace.cjs");
+const { analyzeClients } = require("./client-analytics.cjs");
+const { parseNum, daysBetween, rowsToObjects } = require("./helpers.cjs");
+const { normalize } = require("./product-aliases.cjs");
 
 const TG_TOKEN = process.env.PEPINO_TG_TOKEN || "8711358749:AAF7QJRW2NdwNYGAp2VjL_AOdQOang5Wv00";
 const TG_CHAT_ID = process.env.PEPINO_TG_CHAT_ID || "-1003757515497";
@@ -28,36 +26,6 @@ const TG_THREAD_ID = 20; // Стратегия/Директор
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const SEND_TG = process.argv.includes("--telegram") || !DRY_RUN;
-
-// ── Пороги скоринга ─────────────────────────────────────────────────────────
-
-const RECENCY_THRESHOLDS = [
-  { maxDays: 7, points: 30 },
-  { maxDays: 14, points: 20 },
-  { maxDays: 30, points: 10 },
-  { maxDays: Infinity, points: 0 },
-];
-
-const FREQUENCY_THRESHOLDS = [
-  { minPerMonth: 4, points: 30 },
-  { minPerMonth: 2, points: 20 },
-  { minPerMonth: 1, points: 10 },
-  { minPerMonth: 0, points: 5 },
-];
-
-const MONETARY_THRESHOLDS = [
-  { minTotal: 500_000, points: 30 },
-  { minTotal: 200_000, points: 20 },
-  { minTotal: 50_000, points: 10 },
-  { minTotal: 0, points: 5 },
-];
-
-const TIER_RANGES = [
-  { min: 80, tier: "A", label: "VIP, priority service" },
-  { min: 60, tier: "B", label: "Core, maintain and grow" },
-  { min: 40, tier: "C", label: "Develop, increase frequency" },
-  { min: 0, tier: "D", label: "At risk or inactive" },
-];
 
 const MIN_ORDERS_FOR_TREND = 4; // минимум заказов для анализа тренда
 
@@ -99,117 +67,52 @@ function telegramSend(text) {
   });
 }
 
-// ── Утилиты ─────────────────────────────────────────────────────────────────
-
-function parseNum(v) {
-  if (typeof v === "number") return v;
-  const s = String(v || "")
-    .replace(/\./g, "")
-    .replace(",", ".")
-    .replace("%", "");
-  return parseFloat(s) || 0;
-}
-
-function daysBetween(d1, d2) {
-  return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
-}
-
-/** Преобразует массив строк из Sheets в массив объектов */
-function rowsToJson(rows) {
-  if (!rows || rows.length < 2) return [];
-  const headers = rows[0];
-  return rows.slice(1).map((row) => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i] || "";
-    });
-    return obj;
-  });
-}
-
-// ── Скоринг ─────────────────────────────────────────────────────────────────
-
-/**
- * Подсчитывает баллы за давность последнего заказа.
- * @param {number} daysSinceLast - дней с последнего заказа
- * @returns {number} баллы (0-30)
- */
-function scoreRecency(daysSinceLast) {
-  for (const t of RECENCY_THRESHOLDS) {
-    if (daysSinceLast <= t.maxDays) return t.points;
-  }
-  return 0;
-}
-
-/**
- * Подсчитывает баллы за частоту заказов.
- * @param {number} ordersPerMonth - среднее кол-во заказов в месяц
- * @returns {number} баллы (5-30)
- */
-function scoreFrequency(ordersPerMonth) {
-  for (const t of FREQUENCY_THRESHOLDS) {
-    if (ordersPerMonth >= t.minPerMonth) return t.points;
-  }
-  return 5;
-}
-
-/**
- * Подсчитывает баллы за общую выручку.
- * @param {number} totalRevenue - суммарная выручка ARS
- * @returns {number} баллы (5-30)
- */
-function scoreMonetary(totalRevenue) {
-  for (const t of MONETARY_THRESHOLDS) {
-    if (totalRevenue >= t.minTotal) return t.points;
-  }
-  return 5;
-}
-
-/**
- * Подсчитывает баллы за тренд роста размера заказов.
- * Сравнивает средний размер последних 2 заказов с предыдущими.
- * @param {Array<{total: number}>} orders - отсортированные по дате заказы
- * @returns {{points: number, trend: string}} баллы (0-10) и направление тренда
- */
-function scoreGrowth(orders) {
-  if (orders.length < MIN_ORDERS_FOR_TREND) {
-    return { points: 5, trend: "stable" };
-  }
-
-  const splitIdx = Math.floor(orders.length / 2);
-  const olderOrders = orders.slice(0, splitIdx);
-  const recentOrders = orders.slice(splitIdx);
-
-  const avgOlder = olderOrders.reduce((s, o) => s + o.total, 0) / olderOrders.length;
-  const avgRecent = recentOrders.reduce((s, o) => s + o.total, 0) / recentOrders.length;
-
-  if (avgOlder === 0) return { points: 5, trend: "stable" };
-
-  const changePct = ((avgRecent - avgOlder) / avgOlder) * 100;
-
-  // >10% рост = increasing, <-10% = decreasing, иначе stable
-  if (changePct > 10) return { points: 10, trend: "increasing" };
-  if (changePct < -10) return { points: 0, trend: "decreasing" };
-  return { points: 5, trend: "stable" };
-}
-
-/**
- * Определяет tier клиента по composite score.
- * @param {number} score - composite score (0-100)
- * @returns {{tier: string, label: string}}
- */
-function classifyTier(score) {
-  for (const t of TIER_RANGES) {
-    if (score >= t.min) return { tier: t.tier, label: t.label };
-  }
-  return { tier: "D", label: "At risk or inactive" };
-}
-
 // ── Анализ возможностей роста ────────────────────────────────────────────────
 
 /**
+ * Строит карту сырых заказов по клиентам для анализа возможностей.
+ * @param {Array<Record<string,string>>} salesObjects — строки продаж как объекты
+ * @returns {Map<string, {orders: Array<{date: Date, total: number, product: string}>, totalRevenue: number, products: string[]}>}
+ */
+function buildOrderMap(salesObjects) {
+  /** @type {Map<string, object>} */
+  const clientsMap = new Map();
+
+  for (const sale of salesObjects) {
+    const client = (sale["Клиент"] || sale["клиент"] || sale["client"] || "").trim();
+    if (!client || client === "Тест" || client === "test") continue;
+
+    const dateStr = sale["Дата"] || sale["дата"] || sale["date"] || "";
+    if (!dateStr) continue;
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) continue;
+
+    const total = parseNum(
+      sale["Итого ARS"] || sale["Сумма ARS"] || sale["Сумма"] || sale["total_ars"] || sale["Total"],
+    );
+    const product = normalize(sale["Продукт"] || sale["продукт"] || sale["product"] || "");
+
+    if (!clientsMap.has(client)) {
+      clientsMap.set(client, { orders: [], totalRevenue: 0, products: [] });
+    }
+
+    const data = clientsMap.get(client);
+    data.orders.push({ date, total, product });
+    data.totalRevenue += total;
+    if (product) data.products.push(product);
+  }
+
+  // Сортировка заказов по дате
+  for (const [, data] of clientsMap) {
+    data.orders.sort((a, b) => a.date - b.date);
+  }
+
+  return clientsMap;
+}
+
+/**
  * Выявляет возможности роста для каждого клиента.
- * @param {Map<string, object>} clientsMap - данные клиентов
+ * @param {Map<string, object>} clientsMap — карта сырых заказов
  * @returns {Array<{client: string, type: string, description: string, priority: number}>}
  */
 function findOpportunities(clientsMap) {
@@ -224,11 +127,11 @@ function findOpportunities(clientsMap) {
         client: name,
         type: "cross-sell",
         description: `Покупает только ${uniqueProducts.size} прод. (${[...uniqueProducts].join(", ")}). Предложить ассортимент.`,
-        priority: data.totalRevenue, // приоритет по выручке
+        priority: data.totalRevenue,
       });
     }
 
-    // Upsell: частота заказов растёт
+    // Upsell: частота заказов растёт (gap сокращается на 20%+)
     if (data.orders.length >= MIN_ORDERS_FOR_TREND) {
       const splitIdx = Math.floor(data.orders.length / 2);
       const olderGaps = [];
@@ -244,13 +147,12 @@ function findOpportunities(clientsMap) {
         const avgOlderGap = olderGaps.reduce((a, b) => a + b, 0) / olderGaps.length;
         const avgRecentGap = recentGaps.reduce((a, b) => a + b, 0) / recentGaps.length;
 
-        // Частота растёт = gap сокращается на 20%+
         if (avgOlderGap > 0 && avgRecentGap < avgOlderGap * 0.8) {
           opportunities.push({
             client: name,
             type: "upsell",
             description: `Частота растёт (gap ${Math.round(avgOlderGap)}д -> ${Math.round(avgRecentGap)}д). Предложить объёмную скидку.`,
-            priority: data.totalRevenue * 1.2, // бонус за растущий клиент
+            priority: data.totalRevenue * 1.2,
           });
         }
       }
@@ -289,115 +191,17 @@ function findOpportunities(clientsMap) {
   return opportunities;
 }
 
-// ── Основной анализ ─────────────────────────────────────────────────────────
-
-/**
- * Анализирует все продажи и возвращает скоринг клиентов.
- * @param {Array<object>} sales - строки из листа "Продажи"
- * @returns {{scored: Array<object>, tiers: object, opportunities: Array<object>}}
- */
-function scoreClients(sales) {
-  const now = new Date();
-  /** @type {Map<string, {orders: Array, totalRevenue: number, products: string[]}>} */
-  const clientsMap = new Map();
-
-  // Группировка продаж по клиентам
-  for (const sale of sales) {
-    const client = sale["Клиент"] || sale["клиент"] || sale["client"] || "";
-    if (!client || client === "Тест" || client === "test") continue;
-
-    const dateStr = sale["Дата"] || sale["дата"] || sale["date"] || "";
-    if (!dateStr) continue;
-
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) continue;
-
-    const total = parseNum(
-      sale["Итого ARS"] || sale["Сумма ARS"] || sale["Сумма"] || sale["total_ars"] || sale["Total"],
-    );
-    const product = sale["Продукт"] || sale["продукт"] || sale["product"] || "";
-
-    if (!clientsMap.has(client)) {
-      clientsMap.set(client, { orders: [], totalRevenue: 0, products: [] });
-    }
-
-    const data = clientsMap.get(client);
-    data.orders.push({ date, total, product });
-    data.totalRevenue += total;
-    if (product) data.products.push(product);
-  }
-
-  const scored = [];
-
-  for (const [name, data] of clientsMap) {
-    // Сортировка заказов по дате
-    data.orders.sort((a, b) => a.date - b.date);
-
-    const lastOrder = data.orders[data.orders.length - 1];
-    const daysSinceLast = daysBetween(lastOrder.date, now);
-    const orderCount = data.orders.length;
-
-    // Считаем кол-во месяцев между первым и последним заказом
-    const firstOrder = data.orders[0];
-    const monthsActive = Math.max(1, daysBetween(firstOrder.date, now) / 30);
-    const ordersPerMonth = orderCount / monthsActive;
-
-    // Считаем баллы по каждой метрике
-    const recencyPts = scoreRecency(daysSinceLast);
-    const frequencyPts = scoreFrequency(ordersPerMonth);
-    const monetaryPts = scoreMonetary(data.totalRevenue);
-    const growthResult = scoreGrowth(data.orders);
-
-    const compositeScore = recencyPts + frequencyPts + monetaryPts + growthResult.points;
-    const tierInfo = classifyTier(compositeScore);
-
-    scored.push({
-      name,
-      score: compositeScore,
-      tier: tierInfo.tier,
-      tierLabel: tierInfo.label,
-      recencyPts,
-      frequencyPts,
-      monetaryPts,
-      growthPts: growthResult.points,
-      growthTrend: growthResult.trend,
-      daysSinceLast,
-      orderCount,
-      ordersPerMonth: Math.round(ordersPerMonth * 10) / 10,
-      totalRevenue: Math.round(data.totalRevenue),
-      avgBasket: Math.round(data.totalRevenue / orderCount),
-      lastOrder: lastOrder.date.toISOString().slice(0, 10),
-      uniqueProducts: new Set(data.products).size,
-    });
-  }
-
-  // Сортировка по score (лучшие сверху)
-  scored.sort((a, b) => b.score - a.score);
-
-  // Подсчёт по tier-ам
-  const tiers = { A: [], B: [], C: [], D: [] };
-  for (const c of scored) {
-    tiers[c.tier].push(c);
-  }
-
-  // Выявление возможностей роста
-  const opportunities = findOpportunities(clientsMap);
-
-  return { scored, tiers, opportunities };
-}
-
 // ── Запись в Sheets ─────────────────────────────────────────────────────────
 
 /**
  * Записывает результаты скоринга в лист "Клиенты".
- * Создаёт лист если не существует, перезаписывает данные.
+ * @param {Array<object>} clients — клиенты из analyzeClients()
  */
-async function writeToSheets(scored) {
+async function writeToSheets(clients) {
   const { writeToSheet, createSheetIfNotExists, PEPINO_SHEETS_ID } = await import("./sheets.js");
 
   const sheetName = "\u{1F465} \u041A\u043B\u0438\u0435\u043D\u0442\u044B"; // "Клиенты"
 
-  // Создаём лист, если ещё нет
   try {
     await createSheetIfNotExists(PEPINO_SHEETS_ID, sheetName);
   } catch (err) {
@@ -408,40 +212,30 @@ async function writeToSheets(scored) {
     "Клиент",
     "Score",
     "Tier",
-    "Tier Label",
-    "Recency",
-    "Frequency",
-    "Monetary",
-    "Growth",
-    "Тренд роста",
     "Дней без заказа",
     "Кол-во заказов",
-    "Заказов/мес",
     "Выручка ARS",
     "Ср. чек ARS",
+    "Частота (дни)",
     "Посл. заказ",
     "Уник. продуктов",
+    "Статус",
     "Дата обновления",
   ];
 
   const updateDate = new Date().toISOString().slice(0, 10);
-  const rows = scored.map((c) => [
+  const rows = clients.map((c) => [
     c.name,
-    c.score,
+    c.rfmScore,
     c.tier,
-    c.tierLabel,
-    c.recencyPts,
-    c.frequencyPts,
-    c.monetaryPts,
-    c.growthPts,
-    c.growthTrend,
     c.daysSinceLast,
     c.orderCount,
-    c.ordersPerMonth,
-    c.totalRevenue,
-    c.avgBasket,
-    c.lastOrder,
-    c.uniqueProducts,
+    Math.round(c.totalArs),
+    c.avgOrderArs,
+    c.avgFrequencyDays,
+    c.lastOrder || "",
+    c.products.length,
+    c.status,
     updateDate,
   ]);
 
@@ -453,11 +247,21 @@ async function writeToSheets(scored) {
 
 /**
  * Формирует Telegram-отчёт со сводкой по tier-ам и топ-5 возможностями.
+ * @param {Array<object>} clients — клиенты из analyzeClients()
+ * @param {object} summary — сводка из analyzeClients()
+ * @param {Array<object>} opportunities — возможности роста
+ * @returns {string}
  */
-function formatReport(scored, tiers, opportunities) {
+function formatReport(clients, summary, opportunities) {
   const lines = [];
   const d = new Date().toISOString().slice(0, 10);
   lines.push(`<b>Client Health Scores -- ${d}</b>\n`);
+
+  // Группировка по tier-ам
+  const tiers = { A: [], B: [], C: [], D: [] };
+  for (const c of clients) {
+    if (tiers[c.tier]) tiers[c.tier].push(c);
+  }
 
   // Сводка по tier-ам
   const tierEmojis = { A: "\u{1F451}", B: "\u{1F7E2}", C: "\u{1F7E1}", D: "\u{1F534}" };
@@ -469,22 +273,22 @@ function formatReport(scored, tiers, opportunities) {
   };
 
   for (const t of ["A", "B", "C", "D"]) {
-    const clients = tiers[t];
-    if (clients.length === 0) continue;
+    const tierClients = tiers[t];
+    if (tierClients.length === 0) continue;
 
-    const totalRev = clients.reduce((s, c) => s + c.totalRevenue, 0);
+    const totalRev = tierClients.reduce((s, c) => s + c.totalArs, 0);
     lines.push(
-      `${tierEmojis[t]} <b>Tier ${t}</b> (${tierLabels[t]}): ${clients.length} кл., ${totalRev.toLocaleString()} ARS`,
+      `${tierEmojis[t]} <b>Tier ${t}</b> (${tierLabels[t]}): ${tierClients.length} кл., ${Math.round(totalRev).toLocaleString()} ARS`,
     );
 
     // Показываем до 3 клиентов в каждом tier-е
-    for (const c of clients.slice(0, 3)) {
+    for (const c of tierClients.slice(0, 3)) {
       lines.push(
-        `  - ${c.name}: ${c.score} pts, ${c.orderCount} заказов, ${c.totalRevenue.toLocaleString()} ARS`,
+        `  - ${c.name}: ${c.rfmScore} pts, ${c.orderCount} заказов, ${Math.round(c.totalArs).toLocaleString()} ARS`,
       );
     }
-    if (clients.length > 3) {
-      lines.push(`  ... и ещё ${clients.length - 3}`);
+    if (tierClients.length > 3) {
+      lines.push(`  ... и ещё ${tierClients.length - 3}`);
     }
     lines.push("");
   }
@@ -503,13 +307,8 @@ function formatReport(scored, tiers, opportunities) {
   }
 
   // Итого
-  const totalClients = scored.length;
-  const totalRevenue = scored.reduce((s, c) => s + c.totalRevenue, 0);
-  const avgScore =
-    totalClients > 0 ? Math.round(scored.reduce((s, c) => s + c.score, 0) / totalClients) : 0;
-
   lines.push(
-    `<b>Итого:</b> ${totalClients} клиентов, ср. score ${avgScore}, выручка ${totalRevenue.toLocaleString()} ARS`,
+    `<b>Итого:</b> ${summary.total} клиентов, ср. score ${summary.avgScore}, выручка ${Math.round(summary.totalRevenue).toLocaleString()} ARS`,
   );
 
   return lines.join("\n");
@@ -521,49 +320,51 @@ async function main() {
   const startMs = Date.now();
   console.log(`[${new Date().toISOString()}] Client scorer starting...`);
 
-  // Чтение продаж из Sheets напрямую
-  let sales;
+  // 1. Получаем скоринг клиентов из shared модуля
+  const { clients, summary } = await analyzeClients();
+
+  if (clients.length === 0) {
+    console.log("Нет данных для анализа.");
+    return;
+  }
+
+  // Сортируем по rfmScore (лучшие сверху) вместо дефолтной сортировки по totalArs
+  clients.sort((a, b) => b.rfmScore - a.rfmScore);
+
+  console.log(`Загружено ${summary.total} клиентов`);
+  console.log(`  Tier A (VIP): ${summary.tierA}`);
+  console.log(`  Tier B (Core): ${summary.tierB}`);
+  console.log(`  Tier C (Develop): ${summary.tierC}`);
+  console.log(`  Tier D (At Risk): ${summary.tierD}`);
+
+  // 2. Для выявления возможностей роста нужны сырые заказы
+  let opportunities = [];
   try {
     const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
     const rows = await readSheet(
       PEPINO_SHEETS_ID,
       "\u{1F6D2} \u041F\u0440\u043E\u0434\u0430\u0436\u0438",
-    ); // "Продажи"
-    sales = rowsToJson(rows);
+    );
+    const salesObjects = rowsToObjects(rows);
+    const orderMap = buildOrderMap(salesObjects);
+    opportunities = findOpportunities(orderMap);
+    console.log(`  Возможностей роста: ${opportunities.length}`);
   } catch (err) {
-    console.error(`[FATAL] Не удалось прочитать продажи: ${err.message}`);
-    process.exit(1);
+    console.error(`[WARN] Не удалось построить карту возможностей: ${err.message}`);
   }
 
-  console.log(`Загружено ${sales.length} записей продаж`);
-
-  if (sales.length === 0) {
-    console.log("Нет данных для анализа.");
-    return;
-  }
-
-  // Скоринг
-  const { scored, tiers, opportunities } = scoreClients(sales);
-
-  console.log(`\nРезультаты скоринга:`);
-  console.log(`  Tier A (VIP): ${tiers.A.length}`);
-  console.log(`  Tier B (Core): ${tiers.B.length}`);
-  console.log(`  Tier C (Develop): ${tiers.C.length}`);
-  console.log(`  Tier D (At Risk): ${tiers.D.length}`);
-  console.log(`  Возможностей роста: ${opportunities.length}`);
-
-  // Топ-10 клиентов в консоль
+  // 3. Топ-10 клиентов в консоль
   console.log(`\nТоп-10 клиентов:`);
-  for (const c of scored.slice(0, 10)) {
+  for (const c of clients.slice(0, 10)) {
     console.log(
-      `  ${c.tier} ${c.name}: ${c.score} pts (R${c.recencyPts} F${c.frequencyPts} M${c.monetaryPts} G${c.growthPts}) -- ${c.totalRevenue.toLocaleString()} ARS`,
+      `  ${c.tier} ${c.name}: ${c.rfmScore} pts -- ${Math.round(c.totalArs).toLocaleString()} ARS`,
     );
   }
 
-  // Запись в Sheets
+  // 4. Запись в Sheets
   if (!DRY_RUN) {
     try {
-      await writeToSheets(scored);
+      await writeToSheets(clients);
     } catch (err) {
       console.error(`[ERROR] Sheets write: ${err.message}`);
     }
@@ -571,8 +372,8 @@ async function main() {
     console.log("[DRY-RUN] Пропуск записи в Sheets");
   }
 
-  // Telegram отчёт
-  const report = formatReport(scored, tiers, opportunities);
+  // 5. Telegram отчёт
+  const report = formatReport(clients, summary, opportunities);
 
   if (DRY_RUN) {
     console.log("\n--- Telegram preview ---");
@@ -589,19 +390,18 @@ async function main() {
     }
   }
 
-  // Langfuse trace
+  // 6. Langfuse trace
   await trace({
     name: "client-scorer",
-    input: { sales_count: sales.length },
+    input: { clients_total: summary.total },
     output: {
-      total_clients: scored.length,
-      tier_a: tiers.A.length,
-      tier_b: tiers.B.length,
-      tier_c: tiers.C.length,
-      tier_d: tiers.D.length,
+      total_clients: summary.total,
+      tier_a: summary.tierA,
+      tier_b: summary.tierB,
+      tier_c: summary.tierC,
+      tier_d: summary.tierD,
       opportunities: opportunities.length,
-      avg_score:
-        scored.length > 0 ? Math.round(scored.reduce((s, c) => s + c.score, 0) / scored.length) : 0,
+      avg_score: summary.avgScore,
     },
     duration_ms: Date.now() - startMs,
     metadata: { skill: "pepino-google-sheets", cron: "client-scorer" },

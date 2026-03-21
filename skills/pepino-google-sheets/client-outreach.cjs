@@ -2,11 +2,12 @@
 /**
  * Pepino Pick -- Client Outreach (proactive follow-up)
  *
- * Автоматизирует проактивное follow-up на основе churn-риска:
- *   1. Читает "🛒 Продажи" для анализа истории клиентов
- *   2. Классифицирует клиентов: active / at_risk / churned / new
- *   3. Создаёт задачи в "📋 Задачи" для at_risk (P2) и churned (P3)
- *   4. Отправляет сводку в Telegram (тред 20)
+ * Автоматизирует проактивное follow-up на основе churn-риска.
+ * Использует shared модуль client-analytics.cjs для анализа клиентов.
+ *
+ *   1. Получает классификацию клиентов (active / at_risk / churned / new)
+ *   2. Создаёт задачи в "📋 Задачи" для at_risk (P2) и churned (P3)
+ *   3. Отправляет сводку в Telegram (тред 20)
  *
  * Cron: 0 10 * * 2,5 (вт и пт 10:00)
  * Usage: node client-outreach.cjs [--dry-run]
@@ -16,22 +17,12 @@
 
 const { trace } = require("./langfuse-trace.cjs");
 const { sendReport } = require("./telegram-helper.cjs");
-const { normalize } = require("./product-aliases.cjs");
+const { analyzeClients } = require("./client-analytics.cjs");
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const TG_THREAD_ID = 20; // Стратегия/Директор
 
-// ── Пороги ──────────────────────────────────────────────────────────────────
-
-const DAYS_AT_RISK = 14;
-const DAYS_CHURNED = 30;
-
 // ── Утилиты ─────────────────────────────────────────────────────────────────
-
-/** Количество дней между двумя датами */
-function daysBetween(d1, d2) {
-  return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
-}
 
 /** Формат даты YYYY-MM-DD */
 function fmtDate(d) {
@@ -45,131 +36,11 @@ function addDays(date, n) {
   return fmtDate(d);
 }
 
-// ── Анализ клиентов ─────────────────────────────────────────────────────────
-
-/**
- * Группировка продаж по клиентам и расчёт метрик.
- * @param {Array<string[]>} rows -- строки из Sheets (без заголовков)
- * @param {string[]} headers -- заголовки листа
- * @returns {Map<string, object>} карта клиентов с метриками
- */
-function buildClientMap(rows, headers) {
-  const iClient = headers.findIndex((h) => /клиент/i.test(h));
-  const iDate = headers.findIndex((h) => /дата/i.test(h));
-  const iTotal = headers.findIndex((h) => /итого\s*ars|сумма\s*ars|сумма/i.test(h));
-  const iProduct = headers.findIndex((h) => /продукт|товар/i.test(h));
-  const iQty = headers.findIndex((h) => /кол-во|количество/i.test(h));
-
-  if (iClient < 0 || iDate < 0) {
-    throw new Error(`Не найдены колонки Клиент/Дата. Заголовки: ${headers.join(", ")}`);
-  }
-
-  /** @type {Map<string, object>} */
-  const clients = new Map();
-
-  for (const row of rows) {
-    const clientName = (row[iClient] || "").trim();
-    if (!clientName || /^тест$/i.test(clientName)) continue;
-
-    const dateStr = (row[iDate] || "").trim();
-    if (!dateStr) continue;
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) continue;
-
-    const total = parseFloat((row[iTotal] || "0").replace(/\s/g, "").replace(",", ".")) || 0;
-    const product = iProduct >= 0 ? normalize((row[iProduct] || "").trim()) : "";
-    const qty =
-      iQty >= 0 ? parseFloat((row[iQty] || "0").replace(/\s/g, "").replace(",", ".")) || 0 : 0;
-
-    if (!clients.has(clientName)) {
-      clients.set(clientName, {
-        name: clientName,
-        orders: [],
-        totalRevenue: 0,
-        products: new Map(), // product -> суммарный кг
-      });
-    }
-
-    const c = clients.get(clientName);
-    c.orders.push({ date, total, product, qty });
-    c.totalRevenue += total;
-    if (product) {
-      c.products.set(product, (c.products.get(product) || 0) + qty);
-    }
-  }
-
-  return clients;
-}
-
-/**
- * Классификация клиентов по статусу.
- * @param {Map<string, object>} clients
- * @returns {{ active: object[], at_risk: object[], churned: object[], new_clients: object[] }}
- */
-function classifyClients(clients) {
-  const now = new Date();
-  const result = { active: [], at_risk: [], churned: [], new_clients: [] };
-
-  for (const [, data] of clients) {
-    data.orders.sort((a, b) => a.date - b.date);
-    const lastOrder = data.orders[data.orders.length - 1];
-    const daysSince = daysBetween(lastOrder.date, now);
-    const orderCount = data.orders.length;
-
-    // Средняя частота заказов (в днях)
-    let avgFrequency = null;
-    if (orderCount >= 2) {
-      const totalSpan = daysBetween(data.orders[0].date, lastOrder.date);
-      avgFrequency = Math.round(totalSpan / (orderCount - 1));
-    }
-
-    // Средний чек
-    const avgOrderValue = Math.round(data.totalRevenue / orderCount);
-
-    // Топ-3 продукта по объёму
-    const topProducts = [...data.products.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([p]) => p);
-
-    const summary = {
-      name: data.name,
-      daysSinceLastOrder: daysSince,
-      lastOrderDate: fmtDate(lastOrder.date),
-      orderCount,
-      avgFrequency,
-      avgOrderValue,
-      totalRevenue: Math.round(data.totalRevenue),
-      topProducts,
-    };
-
-    if (orderCount === 1) {
-      summary.status = "new";
-      result.new_clients.push(summary);
-    } else if (daysSince > DAYS_CHURNED) {
-      summary.status = "churned";
-      result.churned.push(summary);
-    } else if (daysSince > DAYS_AT_RISK) {
-      summary.status = "at_risk";
-      result.at_risk.push(summary);
-    } else {
-      summary.status = "active";
-      result.active.push(summary);
-    }
-  }
-
-  // Сортировка по LTV (самые ценные первыми)
-  result.at_risk.sort((a, b) => b.totalRevenue - a.totalRevenue);
-  result.churned.sort((a, b) => b.totalRevenue - a.totalRevenue);
-
-  return result;
-}
-
 // ── Задачи ──────────────────────────────────────────────────────────────────
 
 /**
  * Проверяет, есть ли уже открытая follow-up задача для клиента.
- * @param {Array<string[]>} taskRows -- строки из "📋 Задачи" (без заголовков)
+ * @param {Array<string[]>} taskRows — строки из "📋 Задачи" (без заголовков)
  * @param {string[]} taskHeaders
  * @param {string} clientName
  * @returns {boolean}
@@ -201,8 +72,8 @@ function hasOpenTask(taskRows, taskHeaders, clientName) {
 
 /**
  * Генерирует строки задач для append в "📋 Задачи".
- * @param {object[]} atRisk
- * @param {object[]} churned
+ * @param {object[]} atRisk — клиенты at_risk из analyzeClients
+ * @param {object[]} churned — клиенты churned из analyzeClients
  * @param {Array<string[]>} taskRows
  * @param {string[]} taskHeaders
  * @returns {{ rows: string[][], created: string[] }}
@@ -218,7 +89,7 @@ function generateTasks(atRisk, churned, taskRows, taskHeaders) {
     if (hasOpenTask(taskRows, taskHeaders, client.name)) {
       continue;
     }
-    const taskName = `Follow-up: ${client.name} — ${client.daysSinceLastOrder} дней без заказа`;
+    const taskName = `Follow-up: ${client.name} — ${client.daysSinceLast} дней без заказа`;
     rows.push([
       today, // Дата
       taskName, // Задача
@@ -226,9 +97,9 @@ function generateTasks(atRisk, churned, taskRows, taskHeaders) {
       "P2", // Приоритет
       deadline, // Дедлайн
       "", // Статус (пустой = новая)
-      `LTV ${client.totalRevenue.toLocaleString("ru")} ARS, ` +
-        `ср. чек ${client.avgOrderValue.toLocaleString("ru")} ARS, ` +
-        `частота ~${client.avgFrequency || "?"}д`,
+      `LTV ${Math.round(client.totalArs).toLocaleString("ru")} ARS, ` +
+        `ср. чек ${client.avgOrderArs.toLocaleString("ru")} ARS, ` +
+        `частота ~${client.avgFrequencyDays || "?"}д`,
     ]);
     created.push(taskName);
   }
@@ -238,8 +109,8 @@ function generateTasks(atRisk, churned, taskRows, taskHeaders) {
     if (hasOpenTask(taskRows, taskHeaders, client.name)) {
       continue;
     }
-    const products = client.topProducts.length > 0 ? client.topProducts.join(", ") : "н/д";
-    const taskName = `Follow-up: ${client.name} — ${client.daysSinceLastOrder} дней без заказа (churned)`;
+    const products = client.products.length > 0 ? client.products.slice(0, 3).join(", ") : "н/д";
+    const taskName = `Follow-up: ${client.name} — ${client.daysSinceLast} дней без заказа (churned)`;
     rows.push([
       today,
       taskName,
@@ -248,8 +119,8 @@ function generateTasks(atRisk, churned, taskRows, taskHeaders) {
       deadline,
       "",
       `CHURNED. Последние продукты: ${products}. ` +
-        `LTV ${client.totalRevenue.toLocaleString("ru")} ARS, ` +
-        `ср. заказ ${client.avgOrderValue.toLocaleString("ru")} ARS`,
+        `LTV ${Math.round(client.totalArs).toLocaleString("ru")} ARS, ` +
+        `ср. заказ ${client.avgOrderArs.toLocaleString("ru")} ARS`,
     ]);
     created.push(taskName);
   }
@@ -261,7 +132,7 @@ function generateTasks(atRisk, churned, taskRows, taskHeaders) {
 
 /**
  * Формирует HTML-сводку для Telegram.
- * @param {object} classified
+ * @param {object} classified — объект с active/at_risk/churned/new_clients массивами
  * @param {string[]} tasksCreated
  * @returns {string}
  */
@@ -282,7 +153,8 @@ function formatTelegramReport(classified, tasksCreated) {
     lines.push(`<b>🟡 Топ at-risk (по LTV):</b>`);
     for (const c of classified.at_risk.slice(0, 5)) {
       lines.push(
-        `  ${c.name} — ${c.daysSinceLastOrder}д, ` + `${c.totalRevenue.toLocaleString("ru")} ARS`,
+        `  ${c.name} — ${c.daysSinceLast}д, ` +
+          `${Math.round(c.totalArs).toLocaleString("ru")} ARS`,
       );
     }
     lines.push("");
@@ -292,10 +164,10 @@ function formatTelegramReport(classified, tasksCreated) {
   if (classified.churned.length > 0) {
     lines.push(`<b>🔴 Churned (топ-5):</b>`);
     for (const c of classified.churned.slice(0, 5)) {
-      const prods = c.topProducts.length > 0 ? ` [${c.topProducts.join(", ")}]` : "";
+      const prods = c.products.length > 0 ? ` [${c.products.slice(0, 3).join(", ")}]` : "";
       lines.push(
-        `  ${c.name} — ${c.daysSinceLastOrder}д, ` +
-          `${c.totalRevenue.toLocaleString("ru")} ARS${prods}`,
+        `  ${c.name} — ${c.daysSinceLast}д, ` +
+          `${Math.round(c.totalArs).toLocaleString("ru")} ARS${prods}`,
       );
     }
     lines.push("");
@@ -328,22 +200,25 @@ async function main() {
   console.log(`[${new Date().toISOString()}] Client outreach starting...`);
   if (DRY_RUN) console.log("[DRY RUN] Задачи не будут записаны в Sheets");
 
-  // Загрузка sheets.js (ESM из CJS)
-  const { readSheet, appendToSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
+  // 1. Анализ клиентов через shared модуль
+  const { clients, summary } = await analyzeClients();
 
-  // 1. Чтение продаж
-  const salesRows = await readSheet(PEPINO_SHEETS_ID, "🛒 Продажи");
-  if (!salesRows || salesRows.length < 2) {
-    console.log("Нет данных о продажах.");
+  if (clients.length === 0) {
+    console.log("Нет данных о клиентах.");
     return;
   }
-  const salesHeaders = salesRows[0];
-  const salesData = salesRows.slice(1);
-  console.log(`Загружено ${salesData.length} строк продаж`);
 
-  // 2. Анализ клиентов
-  const clientMap = buildClientMap(salesData, salesHeaders);
-  const classified = classifyClients(clientMap);
+  // 2. Классификация (analyzeClients уже присваивает status)
+  const classified = {
+    active: clients.filter((c) => c.status === "active"),
+    at_risk: clients.filter((c) => c.status === "at_risk"),
+    churned: clients.filter((c) => c.status === "churned"),
+    new_clients: clients.filter((c) => c.status === "new"),
+  };
+
+  // Сортировка at_risk и churned по LTV (самые ценные первыми)
+  classified.at_risk.sort((a, b) => b.totalArs - a.totalArs);
+  classified.churned.sort((a, b) => b.totalArs - a.totalArs);
 
   console.log(`Active: ${classified.active.length}`);
   console.log(`At risk: ${classified.at_risk.length}`);
@@ -351,6 +226,8 @@ async function main() {
   console.log(`New: ${classified.new_clients.length}`);
 
   // 3. Чтение существующих задач (для дедупликации)
+  const { readSheet, appendToSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
+
   let taskRows = [];
   let taskHeaders = [];
   try {
@@ -361,7 +238,7 @@ async function main() {
     }
   } catch (err) {
     console.error(`Не удалось прочитать задачи: ${err.message}`);
-    // Продолжаем без дедупликации -- лучше дубль, чем пропуск
+    // Продолжаем без дедупликации — лучше дубль, чем пропуск
   }
   console.log(`Существующих задач: ${taskRows.length}`);
 
@@ -410,8 +287,7 @@ async function main() {
   await trace({
     name: "client-outreach",
     input: {
-      sales_count: salesData.length,
-      clients_total: clientMap.size,
+      clients_total: summary.total,
       dry_run: DRY_RUN,
     },
     output: {
