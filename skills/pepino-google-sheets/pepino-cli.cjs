@@ -582,6 +582,7 @@ ${c(C.cyan, "System:")}
   ${c(C.bold, "cron")}                List cron jobs with last run time
   ${c(C.bold, "logs")} [script]       Tail last 20 lines of script log
   ${c(C.bold, "index")}               Knowledge indexer stats
+  ${c(C.bold, "twin")} [html]          Digital Twin farm state model
   ${c(C.bold, "n8n")} [list|status]    n8n workflow overview
   ${c(C.bold, "help")}                Show this help
 
@@ -668,6 +669,18 @@ async function main() {
       break;
     case "index":
       cmdIndex();
+      break;
+    case "twin":
+      try {
+        const flag = rest[0] === "html" ? "--html" : "--summary";
+        const out = execSync("node " + path.join(__dirname, "digital-twin.cjs") + " " + flag, {
+          encoding: "utf8",
+          timeout: 30000,
+        });
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.message);
+      }
       break;
     case "n8n":
       try {
