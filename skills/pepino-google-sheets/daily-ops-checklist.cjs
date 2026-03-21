@@ -678,10 +678,15 @@ async function main() {
     console.error("[daily-ops-checklist] DRY RUN: пропуск сохранения задачи");
   }
 
-  // Отправка в Telegram
+  // Отправка в Telegram (Telegram limit 4096 chars)
   if (SEND_TG) {
     try {
-      const result = await send(checklist, {
+      const MAX_TG = 4000;
+      const tgMsg =
+        checklist.length > MAX_TG
+          ? checklist.slice(0, MAX_TG) + "\n\n<i>...обрезано (полный чеклист в Задачах)</i>"
+          : checklist;
+      const result = await send(tgMsg, {
         silent: false,
         threadId: TG_THREAD_OPS,
         parseMode: "HTML",
