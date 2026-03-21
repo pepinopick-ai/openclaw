@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pepino Automation — AI That Works</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a0a;
+    color: #e4e4e7;
+    line-height: 1.6;
+  }
+
+  a { color: #3b82f6; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- Hero ---- */
+  .hero {
+    text-align: center;
+    padding: 100px 24px 80px;
+    background: linear-gradient(180deg, #0f172a 0%, #0a0a0a 100%);
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: #3b82f6; }
+  .hero p {
+    font-size: 1.2rem;
+    color: #a1a1aa;
+    max-width: 620px;
+    margin: 0 auto 32px;
+  }
+  .hero-stats {
+    display: flex;
+    justify-content: center;
+    gap: 48px;
+    flex-wrap: wrap;
+    margin-top: 40px;
+  }
+  .hero-stats div { text-align: center; }
+  .hero-stats strong {
+    display: block;
+    font-size: 2.4rem;
+    color: #3b82f6;
+    font-weight: 800;
+  }
+  .hero-stats span { font-size: 0.9rem; color: #71717a; }
+
+  /* ---- Sections ---- */
+  section { padding: 80px 0; }
+  section h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  /* ---- Case Studies ---- */
+  .cases { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .case-card {
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 12px;
+    padding: 32px;
+    transition: border-color 0.2s;
+  }
+  .case-card:hover { border-color: #3b82f6; }
+  .case-card .tag {
+    display: inline-block;
+    background: #1e3a5f;
+    color: #60a5fa;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .case-card h3 { font-size: 1.3rem; color: #fff; margin-bottom: 12px; }
+  .case-card p { color: #a1a1aa; font-size: 0.95rem; margin-bottom: 16px; }
+  .case-card ul { list-style: none; padding: 0; }
+  .case-card ul li {
+    padding: 4px 0;
+    font-size: 0.9rem;
+    color: #d4d4d8;
+  }
+  .case-card ul li::before {
+    content: "\2713";
+    color: #22c55e;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  /* ---- Tech Stack ---- */
+  .tech-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+  }
+  .tech-badge {
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    padding: 14px 28px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #e4e4e7;
+    transition: border-color 0.2s;
+  }
+  .tech-badge:hover { border-color: #3b82f6; }
+
+  /* ---- Pricing ---- */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+  }
+  .price-card {
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 12px;
+    padding: 32px;
+    text-align: center;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .price-card:hover { border-color: #3b82f6; transform: translateY(-4px); }
+  .price-card.featured {
+    border-color: #3b82f6;
+    background: linear-gradient(180deg, #172554 0%, #18181b 50%);
+  }
+  .price-card .tier {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .price-card .tier.starter { color: #22c55e; }
+  .price-card .tier.growth { color: #3b82f6; }
+  .price-card .tier.enterprise { color: #ef4444; }
+  .price-card .price {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .price-card .price-sub {
+    font-size: 0.85rem;
+    color: #71717a;
+    margin-bottom: 24px;
+  }
+  .price-card ul {
+    list-style: none;
+    padding: 0;
+    text-align: left;
+    margin-bottom: 24px;
+  }
+  .price-card ul li {
+    padding: 6px 0;
+    font-size: 0.9rem;
+    color: #a1a1aa;
+  }
+  .price-card ul li::before {
+    content: "\2713";
+    color: #22c55e;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  /* ---- CTA ---- */
+  .cta {
+    text-align: center;
+    padding: 80px 24px;
+    background: linear-gradient(180deg, #0a0a0a 0%, #0f172a 100%);
+  }
+  .cta h2 { font-size: 2.2rem; color: #fff; margin-bottom: 16px; }
+  .cta p { color: #a1a1aa; font-size: 1.1rem; max-width: 500px; margin: 0 auto 32px; }
+  .cta-buttons { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    padding: 14px 32px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.85; text-decoration: none; }
+  .btn-primary { background: #3b82f6; color: #fff; }
+  .btn-secondary { background: #27272a; color: #e4e4e7; }
+
+  /* ---- Footer ---- */
+  footer {
+    text-align: center;
+    padding: 32px 24px;
+    font-size: 0.85rem;
+    color: #52525b;
+    border-top: 1px solid #1c1c1e;
+  }
+
+  @media (max-width: 640px) {
+    .hero { padding: 64px 16px 48px; }
+    .hero-stats { gap: 24px; }
+    section { padding: 48px 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="container">
+    <h1>Pepino Automation — <span>AI That Works</span></h1>
+    <p>We build practical AI automations for small businesses. No enterprise pricing. No buzzwords. Just systems that run 24/7 and save you hours every week.</p>
+    <div class="hero-stats">
+      <div><strong>80+</strong><span>Scripts in Production</span></div>
+      <div><strong>43</strong><span>Scheduled Jobs (24/7)</span></div>
+      <div><strong>$15/mo</strong><span>Infrastructure Cost</span></div>
+      <div><strong>0</strong><span>Days of Downtime</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- Case Studies -->
+<section>
+  <div class="container">
+    <h2>What We've Built</h2>
+    <div class="cases">
+
+      <div class="case-card">
+        <span class="tag">Agriculture</span>
+        <h3>Farm Management AI</h3>
+        <p>Complete automation of a greenhouse farm: production tracking, sales, expenses, client management, and AI-powered forecasting.</p>
+        <ul>
+          <li>80+ automation scripts in production</li>
+          <li>Digital Twin of physical operations</li>
+          <li>AI demand forecasting (+-10% accuracy)</li>
+          <li>RFM client health scoring</li>
+          <li>43 cron jobs running 24/7</li>
+          <li>$0 unplanned downtime</li>
+        </ul>
+      </div>
+
+      <div class="case-card">
+        <span class="tag">HoReCa</span>
+        <h3>Restaurant Intelligence</h3>
+        <p>RestoBot SaaS prototype for restaurants: automated ordering, waste tracking, demand prediction, and WhatsApp integration.</p>
+        <ul>
+          <li>WhatsApp ordering bot</li>
+          <li>Waste reduction analytics</li>
+          <li>Demand forecast by day-of-week</li>
+          <li>Supplier cost optimization</li>
+          <li>Multi-location dashboard</li>
+        </ul>
+      </div>
+
+      <div class="case-card">
+        <span class="tag">Market Intelligence</span>
+        <h3>Trend Radar System</h3>
+        <p>Automated competitive intelligence: price monitoring, trend detection, supplier risk alerts, and weekly CEO digests.</p>
+        <ul>
+          <li>Competitive price monitoring</li>
+          <li>Trend detection across 8 domains</li>
+          <li>Supplier risk scoring</li>
+          <li>Automated weekly CEO digest</li>
+          <li>761 knowledge chunks indexed</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Tech Stack -->
+<section style="background: #111113;">
+  <div class="container">
+    <h2>Tech Stack</h2>
+    <div class="tech-grid">
+      <div class="tech-badge">n8n</div>
+      <div class="tech-badge">Claude AI</div>
+      <div class="tech-badge">Google Sheets</div>
+      <div class="tech-badge">Docker</div>
+      <div class="tech-badge">Grafana</div>
+      <div class="tech-badge">Telegram</div>
+      <div class="tech-badge">WhatsApp</div>
+      <div class="tech-badge">Node.js</div>
+      <div class="tech-badge">Python</div>
+      <div class="tech-badge">SQLite</div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section>
+  <div class="container">
+    <h2>Pricing</h2>
+    <div class="pricing-grid">
+
+      <div class="price-card">
+        <div class="tier starter">Starter</div>
+        <div class="price">$500</div>
+        <div class="price-sub">one-time + $100/mo maintenance</div>
+        <ul>
+          <li>1 automation workflow (up to 10 steps)</li>
+          <li>Google Sheets integration</li>
+          <li>WhatsApp/Telegram bot (basic)</li>
+          <li>30-day support</li>
+        </ul>
+      </div>
+
+      <div class="price-card featured">
+        <div class="tier growth">Growth</div>
+        <div class="price">$1,500</div>
+        <div class="price-sub">one-time + $300/mo</div>
+        <ul>
+          <li>3-5 automation workflows</li>
+          <li>AI-powered (Claude/GPT)</li>
+          <li>CRM automation</li>
+          <li>Dashboard (Grafana or Sheets)</li>
+          <li>Priority support</li>
+        </ul>
+      </div>
+
+      <div class="price-card">
+        <div class="tier enterprise">Enterprise</div>
+        <div class="price">$3,000-5,000</div>
+        <div class="price-sub">one-time + $500-1,000/mo</div>
+        <ul>
+          <li>Full business automation audit</li>
+          <li>Custom AI agents</li>
+          <li>Multi-system integration</li>
+          <li>Dedicated support channel</li>
+          <li>Monthly optimization reviews</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <h2>Ready to Automate?</h2>
+  <p>Let's talk about what's eating your team's time. 15-minute demo, no commitment.</p>
+  <div class="cta-buttons">
+    <a href="https://wa.me/5491100000000?text=Hi!%20I%27m%20interested%20in%20AI%20automation" class="btn btn-primary">WhatsApp Us</a>
+    <a href="mailto:roman@pepinopick.com?subject=AI%20Automation%20Inquiry" class="btn btn-secondary">Email Us</a>
+  </div>
+</section>
+
+<footer>
+  <p>Pepino Automation &mdash; Built in Argentina, serving the world. &copy; 2026</p>
+</footer>
+
+</body>
+</html>
