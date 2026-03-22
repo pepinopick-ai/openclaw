@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pepino Pick — Catalogo de Productos</title>
+<style>
+  /* ========== Reset & Base ========== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-dark: #1a3a2a;
+    --bg-card: #1f4433;
+    --bg-card-hover: #24503b;
+    --accent: #22c55e;
+    --accent-light: #4ade80;
+    --accent-warm: #f59e0b;
+    --text-primary: #f0fdf4;
+    --text-secondary: #a7c4b5;
+    --text-muted: #6b8f7e;
+    --border-subtle: rgba(34, 197, 94, 0.15);
+    --border-card: rgba(34, 197, 94, 0.25);
+    --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3);
+    --radius: 12px;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ========== Layout ========== */
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 20px;
+  }
+
+  /* ========== Header ========== */
+  .header {
+    text-align: center;
+    padding: 48px 20px 36px;
+    border-bottom: 2px solid var(--border-subtle);
+    margin-bottom: 40px;
+  }
+
+  .header-logo {
+    font-size: 3.2rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .header-logo .accent {
+    color: var(--accent);
+  }
+
+  .header-tagline {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .header-subtitle {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    max-width: 520px;
+    margin: 0 auto;
+  }
+
+  /* ========== Section ========== */
+  .section {
+    margin-bottom: 48px;
+    page-break-inside: avoid;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .section-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+
+  .section-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .section-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-left: auto;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ========== Product Grid ========== */
+  .product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+  }
+
+  /* ========== Product Card ========== */
+  .product-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius);
+    padding: 24px 22px 20px;
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    box-shadow: var(--shadow-card);
+    page-break-inside: avoid;
+  }
+
+  .product-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    background: var(--bg-card-hover);
+  }
+
+  .product-card .badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 20px;
+    line-height: 1.4;
+  }
+
+  .badge-exclusivo {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #1a1a00;
+  }
+
+  .badge-nuevo {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #052e16;
+  }
+
+  .badge-limitado {
+    background: linear-gradient(135deg, #a855f7, #7c3aed);
+    color: #faf5ff;
+  }
+
+  .product-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    padding-right: 70px;
+  }
+
+  .product-desc {
+    font-size: 0.9rem;
+    color: var(--accent-light);
+    font-style: italic;
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+
+  .product-details {
+    list-style: none;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+
+  .product-details li {
+    padding: 3px 0;
+    padding-left: 16px;
+    position: relative;
+  }
+
+  .product-details li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.6;
+  }
+
+  .product-price {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .product-price .price-label {
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  /* ========== Footer ========== */
+  .footer {
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 2px solid var(--border-subtle);
+    text-align: center;
+  }
+
+  .footer-promise {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 24px;
+    letter-spacing: 0.5px;
+  }
+
+  .footer-contacts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+
+  .footer-contacts a,
+  .footer-contacts span {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+
+  .footer-contacts a:hover {
+    color: var(--accent-light);
+  }
+
+  .footer-info {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+
+  .footer-brand {
+    margin-top: 24px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  /* ========== Divider between sections (print) ========== */
+  .section + .section {
+    page-break-before: auto;
+  }
+
+  /* ========== Print adjustments ========== */
+  @media print {
+    body { background: #1a3a2a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .product-card:hover { transform: none; box-shadow: var(--shadow-card); }
+    .container { padding: 0; }
+    .header { padding-top: 24px; padding-bottom: 20px; margin-bottom: 28px; }
+    .section { margin-bottom: 28px; }
+  }
+
+  /* ========== Mobile ========== */
+  @media (max-width: 600px) {
+    .header-logo { font-size: 2.2rem; }
+    .header-tagline { font-size: 0.9rem; }
+    .product-grid { grid-template-columns: 1fr; gap: 16px; }
+    .section-header { flex-wrap: wrap; }
+    .section-subtitle { margin-left: 0; margin-top: 4px; width: 100%; }
+    .footer-contacts { flex-direction: column; gap: 12px; }
+    .container { padding: 16px 14px; }
+  }
+
+  /* ========== Tablet ========== */
+  @media (min-width: 601px) and (max-width: 800px) {
+    .product-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="header">
+    <div class="header-logo">Pepino <span class="accent">Pick</span></div>
+    <div class="header-tagline">Productos frescos y artesanales</div>
+    <p class="header-subtitle">
+      Del invernadero a tu mesa. Cultivo propio en Buenos Aires,
+      sin intermediarios, con calidad garantizada.
+    </p>
+  </header>
+
+  <!-- ==================== FRESCOS ==================== -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-icon">&#x1F952;</span>
+      <h2 class="section-title">Frescos</h2>
+      <span class="section-subtitle">Cosecha del d&iacute;a</span>
+    </div>
+
+    <div class="product-grid">
+
+      <article class="product-card">
+        <span class="badge badge-nuevo">Nuevo</span>
+        <h3 class="product-name">Pepino fresco</h3>
+        <p class="product-desc">&ldquo;De invernadero a tu mesa en 24 horas&rdquo;</p>
+        <ul class="product-details">
+          <li>Cultivo bajo invernadero todo el a&ntilde;o</li>
+          <li>M&iacute;nimo: 3 kg</li>
+          <li>Conservaci&oacute;n: refrigerado 7 d&iacute;as</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <h3 class="product-name">Tomates de colecci&oacute;n</h3>
+        <p class="product-desc">&ldquo;Variedades raras: Bife, Cherry, Heritage&rdquo;</p>
+        <ul class="product-details">
+          <li>5+ variedades por temporada</li>
+          <li>M&iacute;nimo: 2 kg</li>
+          <li>Sabor incomparable con tomate com&uacute;n</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <h3 class="product-name">Eneldo fresco</h3>
+        <p class="product-desc">&ldquo;Aroma aut&eacute;ntico, cortado al momento&rdquo;</p>
+        <ul class="product-details">
+          <li>M&iacute;nimo: 100 g</li>
+          <li>Ideal para pescados y ensaladas</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <span class="badge badge-exclusivo">Exclusivo</span>
+        <h3 class="product-name">Acedera</h3>
+        <p class="product-desc">&ldquo;Ingrediente gourmet europeo, cultivado en Argentina&rdquo;</p>
+        <ul class="product-details">
+          <li>M&iacute;nimo: 200 g</li>
+          <li>Sabor &aacute;cido &uacute;nico para sopas y salsas</li>
+          <li>Conocido como &ldquo;Shchavel&rdquo; en Europa del Este</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ==================== FERMENTADOS ==================== -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-icon">&#x1FAD9;</span>
+      <h2 class="section-title">Fermentados</h2>
+      <span class="section-subtitle">Artesanales</span>
+    </div>
+
+    <div class="product-grid">
+
+      <article class="product-card">
+        <h3 class="product-name">Pepinos en salmuera</h3>
+        <p class="product-desc">&ldquo;Receta tradicional rusa, fermentaci&oacute;n natural sin vinagre&rdquo;</p>
+        <ul class="product-details">
+          <li>Frascos: 1 kg / 3 kg</li>
+          <li>Shelf life: 3 meses refrigerado</li>
+          <li>Fermentaci&oacute;n l&aacute;ctica natural</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <h3 class="product-name">Chucrut casero</h3>
+        <p class="product-desc">&ldquo;Receta ucraniana, fermentaci&oacute;n lenta 21 d&iacute;as&rdquo;</p>
+        <ul class="product-details">
+          <li>Frascos: 500 g / 1 kg</li>
+          <li>Probi&oacute;ticos naturales</li>
+          <li>Solo repollo, sal y tiempo</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <span class="badge badge-exclusivo">Exclusivo</span>
+        <h3 class="product-name">Repollo Pelyustka</h3>
+        <p class="product-desc">&ldquo;Receta ucraniana con remolacha, &uacute;nico en Argentina&rdquo;</p>
+        <ul class="product-details">
+          <li>Frascos: 500 g / 1 kg</li>
+          <li>Color rosa natural de remolacha</li>
+          <li>Crujiente y probiotico</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <span class="badge badge-nuevo">Nuevo</span>
+        <h3 class="product-name">Tomates fermentados</h3>
+        <p class="product-desc">&ldquo;Umami natural, perfecto para pasta y carnes&rdquo;</p>
+        <ul class="product-details">
+          <li>Frascos: 500 g / 1 kg</li>
+          <li>Fermentaci&oacute;n natural</li>
+          <li>Sabor intenso y complejo</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <h3 class="product-name">Salsas picantes</h3>
+        <p class="product-desc">&ldquo;3 variedades: Suave / Medio / Extreme&rdquo;</p>
+        <ul class="product-details">
+          <li>Frascos: 200 ml</li>
+          <li>Chiles frescos de nuestro invernadero</li>
+          <li>Sin conservantes artificiales</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ==================== ESPECIALES ==================== -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-icon">&#x1F9EA;</span>
+      <h2 class="section-title">Especiales</h2>
+      <span class="section-subtitle">Disponibilidad limitada</span>
+    </div>
+
+    <div class="product-grid">
+
+      <article class="product-card">
+        <span class="badge badge-limitado">Limitado</span>
+        <h3 class="product-name">Flores comestibles</h3>
+        <p class="product-desc">&ldquo;Decoraci&oacute;n gourmet que se come&rdquo;</p>
+        <ul class="product-details">
+          <li>Bandejas mix surtidas</li>
+          <li>Solo bajo pedido</li>
+          <li>Ideal para plating profesional</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+          <span>Bajo pedido</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <span class="badge badge-nuevo">Nuevo</span>
+        <h3 class="product-name">Microverdes</h3>
+        <p class="product-desc">&ldquo;Superalimento: 40x m&aacute;s nutrientes&rdquo;</p>
+        <ul class="product-details">
+          <li>Bandejas: 100 g / 200 g</li>
+          <li>R&aacute;bano, girasol, guisante</li>
+          <li>Cosecha semanal</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+      <article class="product-card">
+        <h3 class="product-name">Hongos ostra</h3>
+        <p class="product-desc">&ldquo;Cultivados en sustrato org&aacute;nico&rdquo;</p>
+        <ul class="product-details">
+          <li>Bandejas: 200 g / 500 g</li>
+          <li>Textura carnosa, sabor suave</li>
+          <li>Cultivo controlado en invernadero</li>
+        </ul>
+        <div class="product-price">
+          <span class="price-label">Consultar precio</span>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="footer">
+    <div class="footer-promise">
+      100% producci&oacute;n propia &nbsp;|&nbsp; Sin intermediarios &nbsp;|&nbsp; Fresco garantizado
+    </div>
+
+    <div class="footer-contacts">
+      <a href="https://wa.me/54XXX" target="_blank">WhatsApp: +54 XXX (consultas y pedidos)</a>
+      <a href="https://instagram.com/pepinopick" target="_blank">Instagram: @pepinopick</a>
+    </div>
+
+    <div class="footer-info">
+      Delivery: Buenos Aires y alrededores (133 km)<br>
+      Pedidos m&iacute;nimos para delivery: 5 kg total<br>
+      Entregas: martes y viernes
+    </div>
+
+    <div class="footer-brand">
+      Pepino Pick &mdash; Buenos Aires, Argentina
+    </div>
+  </footer>
+
+</div>
+
+</body>
+</html>
