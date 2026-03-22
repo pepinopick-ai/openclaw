@@ -2,117 +2,89 @@
 /**
  * expense-reminder.cjs — Напоминание о вводе расходов
  *
- * Проверяет: были ли введены расходы за последние N дней.
- * Если нет — отправляет напоминание в Telegram с подсказками.
+ * Проверяет были ли внесены расходы за сегодня.
+ * Если нет — отправляет напоминание в Telegram.
  *
- * Cron: 13:00 daily (после обеда, когда есть время)
+ * Cron: 0 19 * * * (ежедневно 19:00, перед вечерним планированием)
  */
 "use strict";
 
-const { sendThrottled } = (() => {
-  try {
-    return require("./notification-throttle.cjs");
-  } catch {
-    return { sendThrottled: require("./telegram-helper.cjs").send };
-  }
-})();
-
-async function main() {
-  const dryRun = process.argv.includes("--dry-run");
-
-  let state;
-  try {
-    state = await require("./farm-state.cjs").getState();
-  } catch (e) {
-    console.error(`[expense-reminder] farm-state error: ${e.message}`);
-    return;
-  }
-
-  const expenses = state.expenses || [];
-  const today = new Date();
-
-  // Найти последнюю дату расхода
-  const dates = expenses
-    .map((r) => {
-      const d = r["Дата"] || r["Date"] || "";
-      if (!d) return null;
-      // Parse DD/MM/YYYY or YYYY-MM-DD
-      const parts = d.includes("/") ? d.split("/") : null;
-      if (parts && parts.length === 3) {
-        return new Date(+parts[2], +parts[1] - 1, +parts[0]);
-      }
-      const iso = new Date(d);
-      return isNaN(iso) ? null : iso;
-    })
-    .filter(Boolean);
-
-  if (!dates.length) {
-    console.error("[expense-reminder] Нет данных расходов");
-    return;
-  }
-
-  const lastExpenseDate = new Date(Math.max(...dates.map((d) => d.getTime())));
-  const daysSince = Math.floor((today - lastExpenseDate) / 86400000);
-
-  if (daysSince <= 1) {
-    console.error(
-      `[expense-reminder] Расходы актуальны (последний: ${daysSince}д назад). Пропускаю.`,
-    );
-    return;
-  }
-
-  // Подсчитать пропущенные дни
-  const totalDays = 30;
-  const daysWithExpenses = new Set();
-  dates.forEach((d) => {
-    const diff = Math.floor((today - d) / 86400000);
-    if (diff <= totalDays) daysWithExpenses.add(d.toISOString().slice(0, 10));
-  });
-  const coverage = Math.round((daysWithExpenses.size / totalDays) * 100);
-
-  // Типичные категории расходов
-  const categories = [
-    "🌱 Субстрат/мицелий/семена",
-    "⚡ Электричество/газ/вода",
-    "🚛 Бензин/транспорт",
-    "📦 Упаковка/тара",
-    "👷 Зарплата/помощники",
-    "🔧 Ремонт/инструменты",
-    "📱 Связь/интернет",
-    "🏪 Прочее",
-  ];
-
-  const msg = [
-    `⚠️ <b>РАСХОДЫ НЕ ВНЕСЕНЫ ${daysSince} дней!</b>`,
-    ``,
-    `Последняя запись: ${lastExpenseDate.toISOString().slice(0, 10)}`,
-    `Покрытие за 30д: <b>${coverage}%</b> ${coverage < 50 ? "🔴" : coverage < 80 ? "🟡" : "🟢"}`,
-    ``,
-    `<b>Быстрый ввод голосом:</b>`,
-    `🎤 "расход субстрат 15000"`,
-    `🎤 "расход бензин 3500"`,
-    `🎤 "расход электричество 12000"`,
-    ``,
-    `<b>Или CLI:</b>`,
-    `<code>pepino expense "субстрат 15000"</code>`,
-    ``,
-    `<i>Без расходов маржа = 100% (ложная). Введи хотя бы 3 основные категории:</i>`,
-    categories.slice(0, 4).join("\n"),
-  ].join("\n");
-
-  if (dryRun) {
-    console.log(msg.replace(/<\/?[^>]+>/g, ""));
-    return;
-  }
-
-  await sendThrottled(msg, {
-    thread: 20,
-    parseMode: "HTML",
-    priority: daysSince > 5 ? "critical" : "normal",
-  });
-  console.error(
-    `[expense-reminder] Отправлено (${daysSince}д без расходов, покрытие ${coverage}%)`,
-  );
+const { sendReport } = require("./telegram-helper.cjs");
+let sendThrottled;
+try {
+  sendThrottled = require("./notification-throttle.cjs").sendThrottled;
+} catch {
+  sendThrottled = null;
 }
 
-main().catch(console.error);
+const DRY = process.argv.includes("--dry-run");
+
+async function main() {
+  const { getState } = require("./farm-state.cjs");
+  const state = await getState();
+
+  const today = new Date().toISOString().slice(0, 10);
+  const expenses = (state.expenses || []).filter((row) => {
+    const date = row["Дата"] || row["Date"] || "";
+    return date.includes(today) || date.includes(today.split("-").reverse().join("/"));
+  });
+
+  const sales = (state.sales || []).filter((row) => {
+    const date = row["Дата"] || row["Date"] || "";
+    return date.includes(today) || date.includes(today.split("-").reverse().join("/"));
+  });
+
+  // Count days without expenses in last 7 days
+  const last7 = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    const dsAr = ds.split("-").reverse().join("/");
+    const hasExpense = (state.expenses || []).some((row) => {
+      const date = row["Дата"] || row["Date"] || "";
+      return date.includes(ds) || date.includes(dsAr);
+    });
+    last7.push({ date: ds, hasExpense });
+  }
+  const missingDays = last7.filter((d) => !d.hasExpense).length;
+
+  if (expenses.length > 0) {
+    if (!DRY)
+      console.log(
+        `[expense-reminder] Расходы за ${today} уже внесены (${expenses.length} записей). Пропуск.`,
+      );
+    return;
+  }
+
+  // Build reminder message
+  let msg = `<b>💰 Напоминание: расходы за сегодня</b>\n\n`;
+  msg += `За ${today} расходы ещё не внесены.\n\n`;
+
+  if (sales.length > 0) {
+    msg += `📊 При этом продажи есть: ${sales.length} записей\n`;
+    msg += `⚠️ Без расходов маржа показывает 100% (нереально)\n\n`;
+  }
+
+  if (missingDays >= 3) {
+    msg += `🔴 За последние 7 дней расходы не внесены ${missingDays} дней!\n`;
+    msg += `Это снижает точность всей аналитики.\n\n`;
+  }
+
+  msg += `<b>Быстрый ввод (голосом или текстом):</b>\n`;
+  msg += `<code>pepino expense "субстрат 5000"</code>\n`;
+  msg += `<code>pepino expense "доставка 3500"</code>\n`;
+  msg += `<code>pepino expense "электричество 12000"</code>\n\n`;
+  msg += `Или ответь на это сообщение списком расходов 📝`;
+
+  if (DRY) {
+    console.log("[DRY-RUN]", msg.replace(/<[^>]+>/g, ""));
+    return;
+  }
+
+  const sender = sendThrottled || sendReport;
+  await sender(msg, { thread: 20, priority: "normal", parseMode: "HTML" });
+  console.log(`[expense-reminder] Отправлено напоминание (missing: ${missingDays}/7 days)`);
+}
+
+main().catch((e) => console.error("[expense-reminder]", e.message));
