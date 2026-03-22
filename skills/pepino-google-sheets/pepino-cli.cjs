@@ -599,6 +599,16 @@ ${c(C.cyan, "System:")}
   ${c(C.bold, "n8n")} [list|status]    n8n workflow overview
   ${c(C.bold, "help")}                Show this help
 
+${c(C.cyan, "Marketing:")}
+  ${c(C.bold, "content")} [week|post|month|ideas]  Instagram content plan
+  ${c(C.bold, "content post")} --product "X"       Post about specific product
+  ${c(C.bold, "marketing")} [launch|promo|seasonal|reactivation|referral|recipe]
+  ${c(C.bold, "marketing launch")} "product"       New product launch message
+
+${c(C.cyan, "Planning:")}
+  ${c(C.bold, "plan")} [evening|weekly|monthly]    Planning cycle
+  ${c(C.bold, "multiplier")}          Multiplier scan (best combo actions)
+
 ${c(C.dim, "Alias: alias pepino='node /home/roman/openclaw/skills/pepino-google-sheets/pepino-cli.cjs'")}
 `;
   console.log(help);
@@ -779,6 +789,64 @@ async function main() {
           `node ${path.join(__dirname, "planning-cycle.cjs")} ${rest[0] || "evening"} --dry-run`,
           { encoding: "utf8", timeout: 30000 },
         );
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
+      }
+      break;
+
+    case "content": {
+      const sub = rest[0] || "week";
+      const extra = rest.slice(1).join(" ");
+      const flags = extra ? ` ${extra}` : "";
+      try {
+        const out = execSync(`node ${SCRIPT_DIR}/content-planner.cjs ${sub}${flags} --dry-run`, {
+          encoding: "utf8",
+          timeout: 30000,
+        });
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
+      }
+      break;
+    }
+
+    case "marketing": {
+      const sub = rest[0] || "promo";
+      const extra = rest.slice(1).join(" ");
+      const flags = extra ? ` ${extra}` : "";
+      try {
+        const out = execSync(`node ${SCRIPT_DIR}/whatsapp-marketing.cjs ${sub}${flags} --dry-run`, {
+          encoding: "utf8",
+          timeout: 30000,
+        });
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
+      }
+      break;
+    }
+
+    case "plan": {
+      const sub = rest[0] || "evening";
+      try {
+        const out = execSync(`node ${SCRIPT_DIR}/planning-cycle.cjs ${sub} --dry-run`, {
+          encoding: "utf8",
+          timeout: 30000,
+        });
+        console.log(out);
+      } catch (e) {
+        console.error(e.stdout || e.stderr || e.message);
+      }
+      break;
+    }
+
+    case "multiplier":
+      try {
+        const out = execSync(`node ${SCRIPT_DIR}/multiplier-planner.cjs scan --dry-run`, {
+          encoding: "utf8",
+          timeout: 30000,
+        });
         console.log(out);
       } catch (e) {
         console.error(e.stdout || e.stderr || e.message);
