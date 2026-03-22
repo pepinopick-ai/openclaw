@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recetario Pepino Pick - 12 Recetas Frescas y Fermentadas</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 15mm;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background-color: #1a3a2a;
+      color: #f0f0f0;
+      line-height: 1.6;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 30px;
+      background: linear-gradient(170deg, #0f2a1c 0%, #1a3a2a 40%, #1f4a32 100%);
+      page-break-after: always;
+    }
+
+    .cover-logo {
+      font-size: 14px;
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      color: #22c55e;
+      margin-bottom: 40px;
+      font-weight: 600;
+    }
+
+    .cover h1 {
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+      line-height: 1.15;
+    }
+
+    .cover h1 span {
+      color: #22c55e;
+    }
+
+    .cover-subtitle {
+      font-size: 20px;
+      color: #b0c4b0;
+      margin-bottom: 12px;
+      font-weight: 300;
+    }
+
+    .cover-tagline {
+      font-size: 16px;
+      color: #22c55e;
+      font-style: italic;
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .cover-decoration {
+      display: flex;
+      gap: 10px;
+      margin-top: 50px;
+      opacity: 0.5;
+    }
+
+    .cover-decoration span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .section-header {
+      text-align: center;
+      padding: 50px 20px 30px;
+      page-break-before: always;
+    }
+
+    .section-header:first-of-type {
+      page-break-before: auto;
+    }
+
+    .section-number {
+      font-size: 12px;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: #22c55e;
+      margin-bottom: 10px;
+    }
+
+    .section-header h2 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .section-header p {
+      color: #8faa8f;
+      font-size: 15px;
+    }
+
+    .recipe-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(34, 197, 94, 0.15);
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 24px;
+      page-break-inside: avoid;
+    }
+
+    .recipe-card:hover {
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+
+    .recipe-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .recipe-number {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      background: #22c55e;
+      color: #1a3a2a;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .recipe-title-block {
+      flex: 1;
+    }
+
+    .recipe-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .recipe-meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .recipe-meta-item {
+      font-size: 13px;
+      color: #8faa8f;
+    }
+
+    .recipe-meta-item strong {
+      color: #22c55e;
+    }
+
+    .recipe-product {
+      display: inline-block;
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .recipe-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 600px) {
+      .recipe-body {
+        grid-template-columns: 1fr;
+      }
+      .cover h1 {
+        font-size: 32px;
+      }
+    }
+
+    .recipe-ingredients h4,
+    .recipe-steps h4 {
+      font-size: 12px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #22c55e;
+      margin-bottom: 10px;
+    }
+
+    .recipe-ingredients ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .recipe-ingredients li {
+      font-size: 14px;
+      color: #c8d8c8;
+      padding: 3px 0;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .recipe-ingredients li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 11px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(34, 197, 94, 0.4);
+    }
+
+    .recipe-steps ol {
+      list-style: none;
+      padding: 0;
+      counter-reset: steps;
+    }
+
+    .recipe-steps li {
+      font-size: 14px;
+      color: #c8d8c8;
+      padding: 4px 0 4px 28px;
+      position: relative;
+      counter-increment: steps;
+    }
+
+    .recipe-steps li::before {
+      content: counter(steps);
+      position: absolute;
+      left: 0;
+      top: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 20px;
+    }
+
+    .recipe-tip {
+      grid-column: 1 / -1;
+      background: rgba(34, 197, 94, 0.08);
+      border-left: 3px solid #22c55e;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 4px;
+    }
+
+    .recipe-tip-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #22c55e;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .recipe-tip p {
+      font-size: 14px;
+      color: #d0e0d0;
+      font-style: italic;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 60px 20px;
+      border-top: 1px solid rgba(34, 197, 94, 0.2);
+      margin-top: 40px;
+      page-break-before: always;
+    }
+
+    .footer-brand {
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .footer-brand span {
+      color: #22c55e;
+    }
+
+    .footer-tagline {
+      color: #8faa8f;
+      font-size: 15px;
+      margin-bottom: 30px;
+    }
+
+    .footer-contacts {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      flex-wrap: wrap;
+      margin-bottom: 30px;
+    }
+
+    .footer-contact {
+      text-align: center;
+    }
+
+    .footer-contact-label {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #22c55e;
+      margin-bottom: 4px;
+    }
+
+    .footer-contact-value {
+      font-size: 16px;
+      color: #f0f0f0;
+    }
+
+    .footer-contact-value a {
+      color: #f0f0f0;
+      text-decoration: none;
+    }
+
+    .footer-cta {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 10px;
+      padding: 16px 24px;
+      display: inline-block;
+      color: #22c55e;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    @media print {
+      body {
+        background-color: #1a3a2a;
+      }
+      .recipe-card {
+        break-inside: avoid;
+      }
+      .cover {
+        min-height: auto;
+        padding: 120px 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PORTADA -->
+  <section class="cover">
+    <div class="cover-logo">Pepino Pick</div>
+    <h1>RECETARIO<br><span>PEPINO PICK</span></h1>
+    <p class="cover-subtitle">12 recetas con productos frescos y fermentados</p>
+    <p class="cover-tagline">Del invernadero a tu mesa</p>
+    <div class="cover-decoration">
+      <span></span><span></span><span></span>
+    </div>
+  </section>
+
+  <div class="container">
+
+    <!-- SECCION 1: FRESCOS -->
+    <div class="section-header">
+      <div class="section-number">Seccion 01</div>
+      <h2>Frescos</h2>
+      <p>Directo del invernadero, con todo el sabor intacto</p>
+    </div>
+
+    <!-- Receta 1 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">1</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Gazpacho de pepino fresco</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 15 min + 2h refrigeracion</span>
+          </div>
+          <span class="recipe-product">Pepino fresco</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Pepino fresco 500g</li>
+            <li>Tomate 300g</li>
+            <li>Ajo 1 diente</li>
+            <li>Aceite de oliva 3 cdas</li>
+            <li>Vinagre de vino 1 cda</li>
+            <li>Sal a gusto</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Pela y corta el pepino y los tomates en trozos grandes.</li>
+            <li>Licua todo junto con el ajo, aceite, vinagre y sal hasta obtener una textura suave.</li>
+            <li>Refrigera al menos 2 horas tapado.</li>
+            <li>Servi bien frio con un chorrito de aceite de oliva y cubitos de pepino.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Usa pepino recien cosechado -- la diferencia es notable.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 2 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">2</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Ensalada multicolor de tomates heritage</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 10 min</span>
+          </div>
+          <span class="recipe-product">Tomates de coleccion</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>5 variedades de tomate heritage (300g total)</li>
+            <li>Mozzarella fresca 150g</li>
+            <li>Albahaca fresca un manojo</li>
+            <li>Aceite de oliva extra virgen</li>
+            <li>Sal marina en escamas</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Corta cada variedad de tomate en formas distintas: rodajas, mitades, cuartos.</li>
+            <li>Intercala los tomates con trozos de mozzarella y hojas de albahaca en un plato grande.</li>
+            <li>Termina con aceite de oliva generoso y sal marina en escamas.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Corta cada variedad diferente para mostrar los colores. La presentacion es parte del plato.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 3 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">3</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Borscht expres con acedera</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 30 min</span>
+          </div>
+          <span class="recipe-product">Acedera fresca</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Acedera fresca 200g</li>
+            <li>Papa 2 medianas</li>
+            <li>Huevo 2 unidades</li>
+            <li>Crema agria 3 cdas</li>
+            <li>Cebolla 1 mediana</li>
+            <li>Caldo de verduras 1 litro</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Pela y corta las papas en cubos. Pica la cebolla.</li>
+            <li>Hervi el caldo con las papas y la cebolla durante 15 minutos.</li>
+            <li>Agrega la acedera cortada en tiras y cocina 5 minutos mas.</li>
+            <li>Hervi los huevos aparte (10 min), pelalos y cortalos en mitades.</li>
+            <li>Servi el borscht con medio huevo y una cucharada de crema agria en cada plato.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>La acedera le da un toque acido unico -- imposible de replicar con limon.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 4 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">4</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Salmon gravlax con eneldo fresco</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 15 min prep + 24h marinado</span>
+          </div>
+          <span class="recipe-product">Eneldo fresco</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Salmon fresco 500g (filete con piel)</li>
+            <li>Eneldo fresco 100g</li>
+            <li>Sal gruesa 3 cdas</li>
+            <li>Azucar 2 cdas</li>
+            <li>Pimienta negra molida 1 cda</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Mezcla la sal, azucar y pimienta. Cubre el salmon con esta mezcla por ambos lados.</li>
+            <li>Coloca una capa generosa de eneldo fresco sobre el salmon.</li>
+            <li>Envuelve en film, pone peso encima y refrigera 24 horas, dando vuelta a las 12h.</li>
+            <li>Retira la marinada, seca el salmon y corta en laminas finas en diagonal.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>El eneldo fresco es CLAVE -- seco no funciona. Necesitas esa frescura aromatica.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCION 2: FERMENTADOS -->
+    <div class="section-header">
+      <div class="section-number">Seccion 02</div>
+      <h2>Fermentados</h2>
+      <p>Sabores complejos, naturalmente probioticos</p>
+    </div>
+
+    <!-- Receta 5 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">5</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Tabla de fermentados Pepino Pick</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 10 min</span>
+          </div>
+          <span class="recipe-product">Todos los fermentados</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Pepinos en salmuera 150g</li>
+            <li>Chucrut casero 100g</li>
+            <li>Pelyustka 100g</li>
+            <li>Tomates fermentados 100g</li>
+            <li>Pan negro en rebanadas</li>
+            <li>Manteca a temperatura ambiente</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Dispone cada fermentado en un sector de una tabla grande de madera o pizarra.</li>
+            <li>Agrega rebanadas de pan negro tostado y un potecito con manteca.</li>
+            <li>Servi como entrada para compartir con una copa de vino o cerveza artesanal.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Perfecto como entrada para compartir -- tus invitados van a preguntar de donde sacaste todo.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 6 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">6</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Hot dog gourmet con chucrut casero</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 20 min</span>
+          </div>
+          <span class="recipe-product">Chucrut casero</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Salchicha artesanal 4 unidades</li>
+            <li>Pan brioche para hot dog 4</li>
+            <li>Chucrut casero 100g</li>
+            <li>Mostaza de Dijon 2 cdas</li>
+            <li>Cebolla caramelizada 100g</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Cocina las salchichas a la plancha o parrilla hasta que esten bien doradas.</li>
+            <li>Tosta los panes brioche por dentro con un poco de manteca.</li>
+            <li>Arma: pan, mostaza, salchicha, chucrut y cebolla caramelizada encima.</li>
+            <li>Servi de inmediato con papas rusticas o ensalada.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>El chucrut fermentado 21 dias tiene sabor complejo -- nada que ver con el industrial.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 7 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">7</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Pasta con tomates fermentados y albahaca</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 20 min</span>
+          </div>
+          <span class="recipe-product">Tomates fermentados</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Pasta seca 400g (penne o fusilli)</li>
+            <li>Tomates fermentados 200g</li>
+            <li>Ajo 3 dientes</li>
+            <li>Albahaca fresca un manojo</li>
+            <li>Parmesano rallado 50g</li>
+            <li>Aceite de oliva 4 cdas</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Cocina la pasta en abundante agua con sal hasta al dente. Reserva media taza del agua de coccion.</li>
+            <li>En una sarten grande, dora el ajo laminado en aceite de oliva a fuego medio.</li>
+            <li>Agrega los tomates fermentados cortados en trozos y saltea 2 minutos.</li>
+            <li>Incorpora la pasta escurrida, un poco del agua de coccion y mezcla bien.</li>
+            <li>Fuera del fuego, agrega la albahaca fresca y el parmesano. Mezcla y servi.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Los tomates fermentados aportan umami natural -- no necesitas salsa de soja.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 8 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">8</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Wings picantes con salsa Pepino Pick</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 45 min</span>
+          </div>
+          <span class="recipe-product">Salsas picantes</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Alitas de pollo 1kg</li>
+            <li>Salsa picante Pepino Pick (nivel Medio) 4 cdas</li>
+            <li>Manteca 30g</li>
+            <li>Ajo 2 dientes picados</li>
+            <li>Miel 1 cda</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Precalenta el horno a 200 C. Seca bien las alitas con papel y sazonalas con sal y pimienta.</li>
+            <li>Hornea las alitas 35 minutos sobre rejilla, dando vuelta a la mitad.</li>
+            <li>Mientras, derretir la manteca con el ajo, sumar la salsa picante y la miel. Mezclar bien.</li>
+            <li>Saca las alitas del horno, banalas en la salsa y volvelas al horno 5 minutos mas para glasear.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Empeza con nivel Medio -- el Extreme es para valientes.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCION 3: ESPECIALES -->
+    <div class="section-header">
+      <div class="section-number">Seccion 03</div>
+      <h2>Especiales</h2>
+      <p>Hongos, microverdes, flores y mas</p>
+    </div>
+
+    <!-- Receta 9 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">9</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Risotto de hongos ostra</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 35 min</span>
+          </div>
+          <span class="recipe-product">Hongos ostra</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Hongos ostra frescos 300g</li>
+            <li>Arroz arborio 300g</li>
+            <li>Cebolla 1 mediana</li>
+            <li>Vino blanco seco 150ml</li>
+            <li>Parmesano rallado 60g</li>
+            <li>Caldo de verduras 1 litro (caliente)</li>
+            <li>Manteca 40g</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Separa los hongos en trozos irregulares. Doralos en una sarten con manteca a fuego fuerte. Reserva.</li>
+            <li>En olla amplia, rehoga la cebolla picada en aceite hasta transparente.</li>
+            <li>Agrega el arroz y nacaralo 2 minutos revolviendo.</li>
+            <li>Vierte el vino blanco y deja evaporar.</li>
+            <li>Agrega el caldo caliente de a un cucharon, revolviendo y esperando que absorba antes de sumar mas. Repeti 18-20 minutos.</li>
+            <li>Fuera del fuego, incorpora los hongos dorados, parmesano y una nuez de manteca. Tapa 2 minutos y servi.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Dorar los hongos aparte con manteca -- textura perfecta. Nunca los hiervas dentro del risotto.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 10 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">10</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Bowl energetico con microverdes</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 15 min</span>
+          </div>
+          <span class="recipe-product">Microverdes</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Quinoa cocida 200g</li>
+            <li>Palta 1 madura</li>
+            <li>Huevo 2 (poche o mollet)</li>
+            <li>Microverdes frescos 50g</li>
+            <li>Mix de semillas 2 cdas</li>
+            <li>Salsa de soja 1 cda</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Coloca la quinoa tibia como base en dos bowls.</li>
+            <li>Agrega la palta en laminas y el huevo poche o mollet encima.</li>
+            <li>Esparci las semillas y adereza con salsa de soja y un chorrito de aceite de sesamo.</li>
+            <li>Corona con los microverdes frescos justo antes de servir.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Los microverdes van AL FINAL -- nunca cocinarlos. Se agregan en frio para mantener textura y nutrientes.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 11 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">11</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Ensalada con flores comestibles</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 10 min</span>
+          </div>
+          <span class="recipe-product">Flores comestibles</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Mix de hojas verdes 150g</li>
+            <li>Flores comestibles un punado</li>
+            <li>Queso de cabra 80g</li>
+            <li>Nueces tostadas 40g</li>
+            <li>Miel 1 cda</li>
+            <li>Aceite de oliva y limon para vinagreta</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Mezcla el aceite de oliva, jugo de limon y miel para la vinagreta.</li>
+            <li>En un plato o bowl, coloca las hojas, desmenuzar el queso de cabra y las nueces. Adereza.</li>
+            <li>Termina distribuyendo las flores comestibles con delicadeza sobre la superficie.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>Las flores son decoracion Y sabor -- cada variedad tiene su nota. No las mezcles con el aderezo.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receta 12 -->
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="recipe-number">12</div>
+        <div class="recipe-title-block">
+          <div class="recipe-title">Repollo Pelyustka como guarnicion</div>
+          <div class="recipe-meta">
+            <span class="recipe-meta-item"><strong>Tiempo:</strong> 5 min</span>
+          </div>
+          <span class="recipe-product">Repollo Pelyustka</span>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="recipe-ingredients">
+          <h4>Ingredientes</h4>
+          <ul>
+            <li>Pelyustka 200g</li>
+            <li>Carne asada o pollo grillado</li>
+            <li>Limon medio</li>
+            <li>Aceite de oliva 1 cda</li>
+          </ul>
+        </div>
+        <div class="recipe-steps">
+          <h4>Preparacion</h4>
+          <ol>
+            <li>Coloca la pelyustka como guarnicion junto a la carne o pollo recien hecho.</li>
+            <li>Adereza con un chorrito de limon y aceite de oliva. Listo.</li>
+          </ol>
+        </div>
+        <div class="recipe-tip">
+          <div class="recipe-tip-label">Tip del chef</div>
+          <p>EXCLUSIVO en Argentina -- esta receta ucraniana con remolacha no la encontras en ningun lado. Probala y vas a entender.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PIE DE PAGINA -->
+    <footer class="footer">
+      <div class="footer-brand">PEPINO <span>PICK</span></div>
+      <p class="footer-tagline">Todos los productos disponibles en Pepino Pick</p>
+      <div class="footer-contacts">
+        <div class="footer-contact">
+          <div class="footer-contact-label">WhatsApp</div>
+          <div class="footer-contact-value"><a href="https://wa.me/54XXXXXXXXXX">+54 XXX XXX XXXX</a></div>
+        </div>
+        <div class="footer-contact">
+          <div class="footer-contact-label">Instagram</div>
+          <div class="footer-contact-value"><a href="https://instagram.com/pepinopick">@pepinopick</a></div>
+        </div>
+      </div>
+      <div class="footer-cta">
+        Pedidos y consultas: respondemos en menos de 2 horas
+      </div>
+    </footer>
+
+  </div>
+
+</body>
+</html>
