@@ -162,6 +162,58 @@ const PIPELINES = {
       },
     ],
   },
+
+  midday: {
+    name: "midday",
+    description: "Дневной пайплайн: клиенты -> churn -> pricing -> supplier (пн-пт 10:00)",
+    schedule: "0 14 * * 1-5",
+    steps: [
+      {
+        name: "Клиентский outreach",
+        script: "client-outreach.cjs",
+        args: [],
+        timeoutMs: 60_000,
+      },
+      {
+        name: "Детектор оттока",
+        script: "churn-detector.cjs",
+        args: [],
+        timeoutMs: 60_000,
+      },
+      {
+        name: "Авто-прайсинг",
+        script: "auto-pricing.cjs",
+        args: [],
+        timeoutMs: 60_000,
+      },
+      {
+        name: "Мониторинг поставщиков",
+        script: "supplier-monitor.cjs",
+        args: [],
+        timeoutMs: 60_000,
+      },
+    ],
+  },
+
+  radar: {
+    name: "radar",
+    description: "Trend Radar авто: определяет потоки по дню недели",
+    schedule: "0 12 * * 1-5",
+    steps: [
+      {
+        name: "Trend Radar (авто по дню)",
+        script: "trend-radar.cjs",
+        args: ["all"],
+        timeoutMs: 180_000,
+      },
+      {
+        name: "Farm state refresh",
+        script: "farm-state.cjs",
+        args: ["refresh", "--quiet"],
+        timeoutMs: 30_000,
+      },
+    ],
+  },
 };
 
 // ── Результаты шагов ─────────────────────────────────────────────────────────
