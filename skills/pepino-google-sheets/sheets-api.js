@@ -578,18 +578,19 @@ const postRoutes = {
    * Body: { product, zone, weight_kg, status?, note? }
    */
   "/log/production": async (body) => {
+    // Headers: Дата | Продукт | Сорта/детали | Урожай кг | Отход кг | % отхода | Продано кг | Засолка кг | Остаток кг | Бронь кг | Теплица
     const row = [
       body.date || today(),
       body.product || "",
-      body.zone || "",
-      body.substrate_kg || "",
-      body.inoculation_date || "",
-      body.fruiting_date || "",
-      body.weight_kg || "",
-      body.bioefficiency || "",
-      body.status || "сбор",
-      body.greenhouse || "",
-      body.note || "",
+      body.variety || body.sort || "",
+      body.weight_kg || body.harvest_kg || "",
+      body.waste_kg || "",
+      body.waste_pct || "",
+      body.sold_kg || "",
+      body.pickled_kg || "",
+      body.remaining_kg || "",
+      body.reserved_kg || "",
+      body.greenhouse || body.zone || "",
     ];
     await appendToSheet(PEPINO_SHEETS_ID, [row], "🌿 Производство");
     // Invalidate cache
@@ -606,7 +607,10 @@ const postRoutes = {
    * Body: { client, product, qty_kg, price_per_kg, total_ars, channel?, payment?, note? }
    */
   "/log/sales": async (body) => {
+    // Headers: Дата | Клиент | Продукт | Кол-во кг | Цена ARS/кг | Сумма ARS | Доставка ARS | Итого ARS | Курс USD | Сумма USD | Статус | Примечание
     const total = body.total_ars || (body.qty_kg || 0) * (body.price_per_kg || 0);
+    const delivery = body.delivery_cost || body.delivery_ars || "";
+    const itogo = delivery ? (Number(total) + Number(delivery)) : total;
     const row = [
       body.date || today(),
       body.client || "",
@@ -614,11 +618,11 @@ const postRoutes = {
       body.qty_kg || "",
       body.price_per_kg || "",
       total,
+      delivery,
+      itogo,
+      body.exchange_rate || "",
       body.total_usd || "",
-      body.channel || "directo",
-      body.payment || "",
       body.status || "entregado",
-      body.delivery_cost || "",
       body.note || "",
     ];
     await appendToSheet(PEPINO_SHEETS_ID, [row], "🛒 Продажи");
@@ -635,13 +639,16 @@ const postRoutes = {
    * Body: { category, description, amount_ars, payment_method?, note? }
    */
   "/log/expense": async (body) => {
+    // Headers: Дата | Наименование | Кол-во | Единицы | Сумма ARS | Курс USD | Сумма USD
+    const description = body.item || body.description || body.category || "";
     const row = [
       body.date || today(),
-      body.category || "",
-      body.description || "",
+      description,
+      body.qty || body.quantity || "",
+      body.unit || body.units || "",
       body.amount_ars || "",
-      body.payment_method || "efectivo",
-      body.note || "",
+      body.exchange_rate || "",
+      body.amount_usd || "",
     ];
     await appendToSheet(PEPINO_SHEETS_ID, [row], "💰 Расходы");
     delete cache["💰 Расходы"];
