@@ -589,6 +589,12 @@ ${c(C.cyan, "Task Brain:")}
   ${c(C.bold, "multiplier")}           Multiplier scan (7 tasks = 1 action)
   ${c(C.bold, "planning")} [evening|weekly|monthly|review]  Planning cycle
 
+${c(C.cyan, "System Health:")}
+  ${c(C.bold, "health")}              System health score 0-100
+  ${c(C.bold, "improve")}             Improvement recommendations
+  ${c(C.bold, "lessons")}             Lessons learned from completed tasks
+  ${c(C.bold, "review")}              Weekly task review
+
 ${c(C.cyan, "System:")}
   ${c(C.bold, "cron")}                List cron jobs with last run time
   ${c(C.bold, "logs")} [script]       Tail last 20 lines of script log
@@ -597,6 +603,7 @@ ${c(C.cyan, "System:")}
   ${c(C.bold, "crypto")} [prices|dca|risk|portfolio|report]  Crypto portfolio
   ${c(C.bold, "eval")} [seed|report]   Langfuse eval system
   ${c(C.bold, "n8n")} [list|status]    n8n workflow overview
+  ${c(C.bold, "legal")} [status|calendar|guide tema]  Legal tracker
   ${c(C.bold, "help")}                Show this help
 
 ${c(C.cyan, "Marketing:")}
@@ -851,6 +858,26 @@ async function main() {
       } catch (e) {
         console.error(e.stdout || e.stderr || e.message);
       }
+      break;
+
+    case "health":
+      runScript("self-improve.cjs", "health");
+      break;
+
+    case "improve":
+      runScript("self-improve.cjs", "recommendations");
+      break;
+
+    case "lessons":
+      runScript("self-improve.cjs", "lessons");
+      break;
+
+    case "review":
+      runScript("task-brain.cjs", "review --week");
+      break;
+
+    case "legal":
+      runScript("legal-tracker.cjs", args[0] || "status");
       break;
 
     case "help":
