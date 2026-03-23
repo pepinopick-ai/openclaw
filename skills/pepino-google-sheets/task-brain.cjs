@@ -17,11 +17,14 @@
  *   node task-brain.cjs matrix                  -- матрица Эйзенхауэра
  *   node task-brain.cjs backlog                 -- все незапланированные задачи
  *   node task-brain.cjs done "описание задачи"  -- отметить выполненной
+ *   node task-brain.cjs done "описание" --time 45 --quality 4 --lesson "текст"
+ *   node task-brain.cjs review                  -- задачи без оценки
+ *   node task-brain.cjs review --week            -- недельное ревью
  *   node task-brain.cjs stats                   -- статистика
  *   node task-brain.cjs --dry-run <command>
  *
  * API:
- *   const { addTask, generatePlan, getToday, getMatrix, markDone } = require("./task-brain.cjs");
+ *   const { addTask, generatePlan, getToday, getMatrix, markDone, getReview } = require("./task-brain.cjs");
  *
  * Зависимости: farm-state.cjs, helpers.cjs, notification-throttle.cjs, langfuse-trace.cjs
  */
@@ -44,6 +47,16 @@ const BACKLOG_PATH = path.join(
   "workspace",
   "memory",
   "task-brain-backlog.json",
+);
+
+const LESSONS_PATH = path.join(
+  process.env.HOME || "/root",
+  ".openclaw",
+  "workspace",
+  "memory",
+  "knowledge",
+  "decisions",
+  "lessons.json",
 );
 
 /** Telegram-топик для задач (Director/Strategy) */
@@ -330,6 +343,14 @@ const RESOURCE_LOCATION_MAP = {
  * @property {string|null} completed_at -- ISO date
  * @property {string[]} combos -- ID задач для группировки
  * @property {string} preferred_location -- greenhouse|city|home|any
+ * @property {string[]} artifacts_required -- ожидаемые артефакты результата
+ * @property {string} validation -- способ проверки выполнения
+ * @property {string} risk_level -- low|medium|high
+ * @property {string|null} rollback_plan -- что отменить при провале
+ * @property {string[]} blocked_by -- ID задач-зависимостей (синоним dependencies)
+ * @property {number|null} time_spent -- фактическое время в минутах
+ * @property {number|null} quality_score -- оценка качества 1-5
+ * @property {string|null} lessons -- что узнали
  */
 
 /**
@@ -633,6 +654,48 @@ function detectPreferredLocation(resources) {
 }
 
 /**
+ * Определяет необходимые артефакты по ключевым словам.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function detectArtifacts(text) {
+  const lower = text.toLowerCase();
+  /** @type {string[]} */
+  const artifacts = [];
+
+  if (/записать|внести|заполн|обновить таблиц|ввести/.test(lower)) {
+    artifacts.push("sheets_update");
+  }
+  if (/отправить|позвонить|написать|whatsapp|telegram|sms|звонок/.test(lower)) {
+    artifacts.push("communication");
+  }
+  if (/сфото|фото|снять|сними|снимок|фотограф/.test(lower)) {
+    artifacts.push("photo");
+  }
+  if (/построить|сделать|смонтировать|установить|собрать|изготовить/.test(lower)) {
+    artifacts.push("physical_result");
+  }
+  if (/посчитать|расчет|рассчитать|подсчитать|калькул/.test(lower)) {
+    if (!artifacts.includes("sheets_update")) artifacts.push("sheets_update");
+    artifacts.push("calculation");
+  }
+
+  return artifacts.length > 0 ? artifacts : ["result"];
+}
+
+/**
+ * Определяет уровень риска задачи.
+ * @param {Domain} domain
+ * @param {number} importance
+ * @returns {string}
+ */
+function detectRiskLevel(domain, importance) {
+  if (domain === "finance" && importance >= 4) return "high";
+  if (importance >= 3) return "medium";
+  return "low";
+}
+
+/**
  * Полный анализ задачи по 8 измерениям.
  * @param {string} rawText -- исходный текст задачи
  * @param {Task[]} existingTasks -- существующие задачи для поиска зависимостей
@@ -668,6 +731,15 @@ function analyzeTask(rawText, existingTasks = []) {
     completed_at: null,
     combos: [],
     preferred_location: detectPreferredLocation(resources),
+    // Task Package fields (Replit Agent 4 pattern)
+    artifacts_required: detectArtifacts(rawText),
+    validation: "manual",
+    risk_level: detectRiskLevel(domain, importance),
+    rollback_plan: null,
+    blocked_by: detectDependencies(rawText, existingTasks),
+    time_spent: null,
+    quality_score: null,
+    lessons: null,
   };
 }
 
@@ -689,6 +761,9 @@ function detectCombos(tasks) {
     combos.push({
       ids: vehicleTasks.map((t) => t.id),
       reason: "1 поездка, несколько задач",
+      saving_time_min: vehicleTasks.length > 2 ? (vehicleTasks.length - 1) * 60 : 120,
+      saving_ars: 5000 * (vehicleTasks.length - 1),
+      combo_type: "vehicle",
     });
   }
 
@@ -698,6 +773,9 @@ function detectCombos(tasks) {
     combos.push({
       ids: ghTasks.map((t) => t.id),
       reason: "1 обход теплицы, несколько задач",
+      saving_time_min: 20 * (ghTasks.length - 1),
+      saving_ars: 0,
+      combo_type: "greenhouse",
     });
   }
 
@@ -708,17 +786,37 @@ function detectCombos(tasks) {
   if (phoneTasks.length >= 2) {
     combos.push({
       ids: phoneTasks.map((t) => t.id),
-      reason: "сессия звонков подряд",
+      reason: "1 сессия звонков",
+      saving_time_min: 15 * (phoneTasks.length - 1),
+      saving_ars: 0,
+      combo_type: "phone",
     });
   }
 
-  // Группа 4: Одинаковый домен -- sales session, marketing session
+  // Группа 4: Задачи computer -- рабочая сессия
+  const computerTasks = active.filter(
+    (t) => t.resources.includes("computer") && !t.resources.includes("phone_only"),
+  );
+  if (computerTasks.length >= 2) {
+    combos.push({
+      ids: computerTasks.map((t) => t.id),
+      reason: "1 рабочая сессия за компьютером",
+      saving_time_min: 20 * (computerTasks.length - 1),
+      saving_ars: 0,
+      combo_type: "computer",
+    });
+  }
+
+  // Группа 5: Одинаковый домен -- sales session, marketing session
   for (const domain of ["sales", "marketing"]) {
     const domTasks = active.filter((t) => t.domain === domain);
     if (domTasks.length >= 2) {
       combos.push({
         ids: domTasks.map((t) => t.id),
         reason: `${DOMAIN_LABELS[domain]}-сессия`,
+        saving_time_min: 15 * (domTasks.length - 1),
+        saving_ars: 0,
+        combo_type: "domain_session",
       });
     }
   }
@@ -986,9 +1084,24 @@ function formatTodayTelegram(plan) {
   }
 
   if (s.combos && s.combos.length > 0) {
-    for (const combo of s.combos) {
+    lines.push(
+      "\u{1F517} \u041A\u041E\u041C\u0411\u041E \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u044B:",
+    );
+    for (let ci = 0; ci < s.combos.length; ci++) {
+      const combo = s.combos[ci];
+      const ids = combo.ids.slice(0, 5).join("+");
+      const savingParts = [];
+      if (combo.saving_time_min > 0)
+        savingParts.push(
+          `\u044D\u043A\u043E\u043D\u043E\u043C\u0438\u044F ${combo.saving_time_min}\u043C\u0438\u043D`,
+        );
+      if (combo.saving_ars > 0) savingParts.push(`${fmtNum(combo.saving_ars)} ARS`);
+      const saving =
+        savingParts.length > 0
+          ? ` (\u044D\u043A\u043E\u043D\u043E\u043C\u0438\u044F: ${savingParts.join(" + ")})`
+          : "";
       lines.push(
-        `\u{1F3AF} \u041C\u0443\u043B\u044C\u0442\u0438\u043F\u043B\u0438\u043A\u0430\u0442\u043E\u0440: ${combo.reason} (${combo.ids.length} \u0437\u0430\u0434\u0430\u0447)`,
+        `  ${ci + 1}. \u0417\u0430\u0434\u0430\u0447\u0438 ${ids} = ${combo.reason}${saving}`,
       );
     }
   }
@@ -1121,6 +1234,180 @@ function formatAddedTaskTelegram(task) {
     );
   }
   lines.push(`\u{1F194} ${task.id}`);
+
+  return lines.join("\n");
+}
+
+// -- Уроки (lessons-learned) --------------------------------------------------
+
+/**
+ * Загружает уроки из файла.
+ * @returns {object[]}
+ */
+function loadLessons() {
+  try {
+    if (fs.existsSync(LESSONS_PATH)) {
+      const raw = fs.readFileSync(LESSONS_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Повреждённый файл
+  }
+  return [];
+}
+
+/**
+ * Сохраняет уроки атомарно.
+ * @param {object[]} lessons
+ */
+function saveLessons(lessons) {
+  const dir = path.dirname(LESSONS_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const tmpPath = LESSONS_PATH + ".tmp";
+  fs.writeFileSync(tmpPath, JSON.stringify(lessons, null, 2), "utf-8");
+  fs.renameSync(tmpPath, LESSONS_PATH);
+}
+
+/**
+ * Добавляет урок в файл lessons.json.
+ * @param {Task} task
+ */
+function appendLesson(task) {
+  const lessons = loadLessons();
+  const entry = {
+    date: argentinaToday(),
+    task: task.raw,
+    domain: task.domain,
+    time_planned: task.effort,
+    time_actual: task.time_spent,
+    quality: task.quality_score,
+    lesson: task.lessons,
+    tags: task.resources.slice(),
+  };
+  lessons.push(entry);
+  saveLessons(lessons);
+}
+
+// -- Ревью (review) -----------------------------------------------------------
+
+/**
+ * Форматирует ревью недели для вывода.
+ * @param {Task[]} backlog
+ * @param {boolean} weekMode
+ * @returns {string}
+ */
+function formatReview(backlog, weekMode) {
+  const now = new Date();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const doneTasks = backlog.filter((t) => t.status === "done");
+  const recentDone = doneTasks.filter((t) => {
+    if (!t.completed_at) return false;
+    return new Date(t.completed_at) >= weekAgo;
+  });
+
+  const lines = [];
+  lines.push("\u{1F9E0} TASK BRAIN -- \u0420\u0435\u0432\u044E");
+  lines.push("");
+
+  if (!weekMode) {
+    // Задачи без review score
+    const noReview = doneTasks.filter(
+      (t) => t.quality_score === null || t.quality_score === undefined,
+    );
+    if (noReview.length === 0) {
+      lines.push(
+        "\u2705 \u0412\u0441\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043D\u044B\u0435 \u0437\u0430\u0434\u0430\u0447\u0438 \u043E\u0446\u0435\u043D\u0435\u043D\u044B.",
+      );
+    } else {
+      lines.push(
+        `\u26A0\uFE0F \u0417\u0430\u0434\u0430\u0447\u0438 \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043A\u0438 (${noReview.length}):`,
+      );
+      for (const t of noReview.slice(0, 10)) {
+        lines.push(`  \u2022 [${t.id}] ${t.raw}`);
+      }
+      lines.push("");
+      lines.push(
+        `\u041F\u043E\u0434\u0441\u043A\u0430\u0437\u043A\u0430: node task-brain.cjs done "<\u0437\u0430\u0434\u0430\u0447\u0430>" --time 30 --quality 4 --lesson "\u0447\u0442\u043E \u0443\u0437\u043D\u0430\u043B\u0438"`,
+      );
+    }
+    return lines.join("\n");
+  }
+
+  // Недельное ревью
+  lines.push(
+    `\u{1F4C5} \u041D\u0435\u0434\u0435\u043B\u044C: ${recentDone.length} \u0437\u0430\u0434\u0430\u0447 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043E`,
+  );
+  lines.push("");
+
+  if (recentDone.length === 0) {
+    lines.push(
+      "\u041D\u0435\u0442 \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u044B\u0445 \u0437\u0430\u0434\u0430\u0447 \u0437\u0430 \u043D\u0435\u0434\u0435\u043B\u044E.",
+    );
+    return lines.join("\n");
+  }
+
+  // Средняя оценка качества
+  const scored = recentDone.filter((t) => t.quality_score != null);
+  if (scored.length > 0) {
+    const avgQuality =
+      Math.round((scored.reduce((s, t) => s + (t.quality_score || 0), 0) / scored.length) * 10) /
+      10;
+    lines.push(
+      `\u2B50 \u0421\u0440\u0435\u0434\u043D\u044F\u044F \u043E\u0446\u0435\u043D\u043A\u0430: ${avgQuality}/5 (\u043F\u043E ${scored.length} \u0437\u0430\u0434\u0430\u0447\u0430\u043C)`,
+    );
+  }
+
+  // Время плановое vs фактическое
+  const timed = recentDone.filter((t) => t.time_spent != null);
+  if (timed.length > 0) {
+    const totalActual = timed.reduce((s, t) => s + (t.time_spent || 0), 0);
+    lines.push(
+      `\u23F1 \u0424\u0430\u043A\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0435 \u0432\u0440\u0435\u043C\u044F: ${totalActual} \u043C\u0438\u043D (\u043F\u043E ${timed.length} \u0437\u0430\u0434\u0430\u0447\u0430\u043C)`,
+    );
+  }
+  lines.push("");
+
+  // Уроки
+  const withLesson = recentDone.filter((t) => t.lessons);
+  if (withLesson.length > 0) {
+    lines.push("\u{1F4DA} \u0423\u0440\u043E\u043A\u0438:");
+    for (const t of withLesson) {
+      lines.push(`  \u2022 ${t.raw}: ${t.lessons}`);
+    }
+    lines.push("");
+  }
+
+  // Домены -- количество задач и средняя оценка
+  /** @type {Record<string, {count: number, scores: number[]}>} */
+  const domainStats = {};
+  for (const t of recentDone) {
+    if (!domainStats[t.domain]) domainStats[t.domain] = { count: 0, scores: [] };
+    domainStats[t.domain].count++;
+    if (t.quality_score != null) domainStats[t.domain].scores.push(t.quality_score);
+  }
+
+  lines.push("\u{1F4CA} \u041F\u043E \u0434\u043E\u043C\u0435\u043D\u0430\u043C:");
+  for (const [dom, stat] of Object.entries(domainStats)) {
+    const label = DOMAIN_LABELS[dom] || dom;
+    if (stat.scores.length > 0) {
+      const avg =
+        Math.round((stat.scores.reduce((s, v) => s + v, 0) / stat.scores.length) * 10) / 10;
+      const rec =
+        avg < 3.5
+          ? " \u2014 \u043D\u0443\u0436\u043D\u043E \u0443\u043B\u0443\u0447\u0448\u0438\u0442\u044C \u043F\u0440\u043E\u0446\u0435\u0441\u0441"
+          : "";
+      lines.push(
+        `  ${label}: ${stat.count} \u0437\u0430\u0434\u0430\u0447, \u043E\u0446\u0435\u043D\u043A\u0430 ${avg}${rec}`,
+      );
+    } else {
+      lines.push(`  ${label}: ${stat.count} \u0437\u0430\u0434\u0430\u0447`);
+    }
+  }
 
   return lines.join("\n");
 }
@@ -1324,13 +1611,13 @@ function getBacklog(options = {}) {
 }
 
 /**
- * Отмечает задачу выполненной.
+ * Отмечает задачу выполненной, собирает метаданные завершения.
  * @param {string} query -- описание или ID задачи
- * @param {{ dryRun?: boolean }} [options]
+ * @param {{ dryRun?: boolean, time?: number, quality?: number, lesson?: string }} [options]
  * @returns {Promise<Task|null>}
  */
 async function markDone(query, options = {}) {
-  const { dryRun = false } = options;
+  const { dryRun = false, time = null, quality = null, lesson = null } = options;
   const backlog = loadBacklog();
   const lower = query.toLowerCase();
 
@@ -1344,20 +1631,59 @@ async function markDone(query, options = {}) {
   task.status = "done";
   task.completed_at = new Date().toISOString();
 
+  // Сохраняем метаданные завершения
+  if (time !== null) task.time_spent = time;
+  if (quality !== null) task.quality_score = Math.min(5, Math.max(1, quality));
+  if (lesson !== null) task.lessons = lesson;
+
   if (!dryRun) {
     saveBacklog(backlog);
-    const msg = `\u2705 \u0417\u0430\u0434\u0430\u0447\u0430 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430: ${task.raw}`;
+    // Если есть урок -- записываем в lessons.json
+    if (lesson !== null) {
+      appendLesson(task);
+    }
+    const parts = [
+      `\u2705 \u0417\u0430\u0434\u0430\u0447\u0430 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0430: ${task.raw}`,
+    ];
+    if (time !== null) parts.push(`\u23F1 ${time} \u043C\u0438\u043D`);
+    if (quality !== null) parts.push(`\u2B50 ${quality}/5`);
+    if (lesson !== null) parts.push(`\u{1F4DA} ${lesson}`);
+    const msg = parts.join(" | ");
     await sendThrottled(msg, { thread: TOPIC_TASKS, silent: true, priority: "normal" });
   }
 
   await trace({
     name: "task-brain/done",
-    input: { query },
+    input: { query, time, quality, lesson },
     output: { task_id: task.id, raw: task.raw },
     metadata: { skill: "task-brain", dry_run: dryRun },
   });
 
   return task;
+}
+
+/**
+ * Возвращает ревью задач (без оценок или недельный итог).
+ * @param {{ week?: boolean, dryRun?: boolean }} [options]
+ * @returns {Promise<string>}
+ */
+async function getReview(options = {}) {
+  const { week = false, dryRun = false } = options;
+  const backlog = loadBacklog();
+  const message = formatReview(backlog, week);
+
+  if (!dryRun) {
+    await sendThrottled(message, { thread: TOPIC_TASKS, silent: true, priority: "normal" });
+  }
+
+  await trace({
+    name: "task-brain/review",
+    input: { week },
+    output: { message_length: message.length },
+    metadata: { skill: "task-brain", dry_run: dryRun },
+  });
+
+  return message;
 }
 
 /**
@@ -1480,23 +1806,72 @@ if (require.main === module) {
         }
 
         case "done": {
-          if (!arg) {
+          // Парсим --time, --quality, --lesson из filteredArgs
+          // arg содержит оставшиеся слова после "done", но флаги надо вырезать
+          const rawDoneArgs = filteredArgs.slice(1); // всё после "done"
+          const timeIdx = rawDoneArgs.indexOf("--time");
+          const qualityIdx = rawDoneArgs.indexOf("--quality");
+          const lessonIdx = rawDoneArgs.indexOf("--lesson");
+
+          const timeVal = timeIdx >= 0 ? parseInt(rawDoneArgs[timeIdx + 1], 10) || null : null;
+          const qualityVal =
+            qualityIdx >= 0 ? parseInt(rawDoneArgs[qualityIdx + 1], 10) || null : null;
+
+          // Урок может быть многословным -- берём следующий аргумент (в кавычках shell уже объединит)
+          const lessonVal = lessonIdx >= 0 ? rawDoneArgs[lessonIdx + 1] || null : null;
+
+          // Убираем флаги и их значения из args, чтобы получить чистое описание задачи
+          const skipIndices = new Set();
+          if (timeIdx >= 0) {
+            skipIndices.add(timeIdx);
+            skipIndices.add(timeIdx + 1);
+          }
+          if (qualityIdx >= 0) {
+            skipIndices.add(qualityIdx);
+            skipIndices.add(qualityIdx + 1);
+          }
+          if (lessonIdx >= 0) {
+            skipIndices.add(lessonIdx);
+            skipIndices.add(lessonIdx + 1);
+          }
+          const queryArg = rawDoneArgs
+            .filter((_, i) => !skipIndices.has(i))
+            .join(" ")
+            .trim();
+
+          if (!queryArg) {
             console.error(
               "\u041E\u0448\u0438\u0431\u043A\u0430: \u0443\u043A\u0430\u0436\u0438\u0442\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0438\u043B\u0438 ID \u0437\u0430\u0434\u0430\u0447\u0438",
             );
             process.exit(1);
           }
-          const done = await markDone(arg, { dryRun });
+          const done = await markDone(queryArg, {
+            dryRun,
+            time: timeVal,
+            quality: qualityVal,
+            lesson: lessonVal,
+          });
           if (done) {
-            process.stdout.write(
-              `\u2705 \u0412\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043E: ${done.raw}\n`,
-            );
+            const parts = [
+              `\u2705 \u0412\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043E: ${done.raw}`,
+            ];
+            if (timeVal !== null) parts.push(`\u23F1 ${timeVal} \u043C\u0438\u043D`);
+            if (qualityVal !== null) parts.push(`\u2B50 ${qualityVal}/5`);
+            if (lessonVal) parts.push(`\u{1F4DA} ${lessonVal}`);
+            process.stdout.write(parts.join(" | ") + "\n");
           } else {
             console.error(
-              `\u0417\u0430\u0434\u0430\u0447\u0430 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430: "${arg}"`,
+              `\u0417\u0430\u0434\u0430\u0447\u0430 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430: "${queryArg}"`,
             );
             process.exit(1);
           }
+          break;
+        }
+
+        case "review": {
+          const weekMode = filteredArgs.includes("--week");
+          const message = await getReview({ week: weekMode, dryRun });
+          process.stdout.write(message + "\n");
           break;
         }
 
@@ -1558,6 +1933,15 @@ if (require.main === module) {
             '  node task-brain.cjs done "\u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435"     -- \u043E\u0442\u043C\u0435\u0442\u0438\u0442\u044C \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043D\u043E\u0439\n',
           );
           process.stdout.write(
+            '  node task-brain.cjs done "\u043E\u043F\u0438\u0441" --time 45 --quality 4 --lesson "\u0443\u0440\u043E\u043A"\n',
+          );
+          process.stdout.write(
+            "  node task-brain.cjs review                -- \u0437\u0430\u0434\u0430\u0447\u0438 \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043A\u0438\n",
+          );
+          process.stdout.write(
+            "  node task-brain.cjs review --week         -- \u043D\u0435\u0434\u0435\u043B\u044C\u043D\u043E\u0435 \u0440\u0435\u0432\u044C\u044E\n",
+          );
+          process.stdout.write(
             "  node task-brain.cjs stats                 -- \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430\n",
           );
           process.stdout.write(
@@ -1583,6 +1967,7 @@ module.exports = {
   getBacklog,
   markDone,
   getStats,
+  getReview,
   // Для тестирования
   _internal: {
     analyzeTask,
@@ -1594,12 +1979,17 @@ module.exports = {
     detectEnergy,
     detectCost,
     detectMultiplier,
+    detectArtifacts,
+    detectRiskLevel,
     eisenhowerQuadrant,
     detectCombos,
     planDay,
     prioritySort,
     loadBacklog,
     saveBacklog,
+    loadLessons,
+    saveLessons,
     BACKLOG_PATH,
+    LESSONS_PATH,
   },
 };
