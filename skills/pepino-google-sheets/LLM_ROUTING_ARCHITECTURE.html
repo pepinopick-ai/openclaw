@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Pepino Pick Agent OS -- Руководство</title>
+<style>
+@page {
+  size: A4;
+  margin: 20mm 15mm;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #333;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+h1 {
+  color: #2d5016;
+  border-bottom: 3px solid #4CAF50;
+  padding-bottom: 10px;
+  margin-top: 40px;
+  font-size: 24px;
+}
+h2 {
+  color: #388E3C;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 6px;
+  margin-top: 30px;
+  font-size: 18px;
+}
+h3 {
+  color: #555;
+  margin-top: 20px;
+  font-size: 15px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 12px;
+}
+th, td {
+  border: 1px solid #ddd;
+  padding: 7px 10px;
+  text-align: left;
+}
+th {
+  background: #e8f5e9;
+  font-weight: bold;
+  color: #2d5016;
+}
+tr:nth-child(even) {
+  background: #fafafa;
+}
+code {
+  background: #f0f0f0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 11px;
+  overflow-x: auto;
+}
+pre code {
+  background: transparent;
+  color: inherit;
+}
+blockquote {
+  border-left: 4px solid #4CAF50;
+  margin: 12px 0;
+  padding: 10px 18px;
+  background: #f9fff9;
+  color: #555;
+  font-style: italic;
+}
+hr {
+  border: none;
+  border-top: 2px solid #e0e0e0;
+  margin: 30px 0;
+}
+ul {
+  padding-left: 20px;
+}
+li {
+  margin: 3px 0;
+}
+strong {
+  color: #2d5016;
+}
+.task-list-item {
+  list-style: none;
+}
+</style>
+</head>
+<body>
+<h1>Pepino Pick — Система автоматической маршрутизации LLM</h1>
+<blockquote>
+<p>Архитектура v1.0 | Март 2026</p>
+</blockquote>
+<hr />
+<h2>Проблема</h2>
+<p>Сейчас все 29 скиллов Pepino Pick используют одну модель (Claude Sonnet) для ВСЕХ задач — от простого "запиши урожай" до сложного "DCF проекта теплицы". Это как нанимать финансового директора для ввода данных в таблицу.</p>
+<p><strong>Текущие расходы (оценка):</strong> ~$150-300/мес при 3000 задач
+<strong>Целевые расходы:</strong> ~$40-80/мес (-60-75%)</p>
+<hr />
+<h2>Архитектура: 4-уровневая маршрутизация</h2>
+<pre><code>Запрос пользователя
+        |
+        v
+  [ДИСПЕТЧЕР] — определяет intent + skill
+        |
+        v
+  [КЛАССИФИКАТОР СЛОЖНОСТИ] — определяет Tier (1-4)
+        |
+        v
+  [LLM ROUTER] — выбирает модель по Tier + бюджету
+        |
+        +--- Tier 1 (простые) ------&gt; Gemini Flash / GPT-4o-mini / Llama 8B
+        |
+        +--- Tier 2 (средние) ------&gt; DeepSeek V3 / Kimi K2.5 / Claude Haiku
+        |
+        +--- Tier 3 (сложные) ------&gt; Claude Sonnet / GPT-4o
+        |
+        +--- Tier 4 (критические) --&gt; Claude Sonnet + верификация
+        |
+        v
+  [QUALITY CHECKER] — проверяет ответ
+        |
+        +--- OK ---------&gt; Возврат результата
+        +--- Не ОК ------&gt; Escalation на следующий Tier (cascading)
+</code></pre>
+<hr />
+<h2>Классификация скиллов по Tier</h2>
+<h3>Tier 1 — Простые ($0.001-0.005/задача)</h3>
+<p>Задачи: ввод данных, форматирование, извлечение, шаблонные операции.</p>
+<table>
+<thead>
+<tr>
+<th>Скилл</th>
+<th>Типичные задачи</th>
+<th>Модель</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>pepino-google-sheets</strong></td>
+<td>Запись/чтение строк, append</td>
+<td>Gemini Flash</td>
+</tr>
+<tr>
+<td><strong>pepino-agro-ops</strong> (режим записи)</td>
+<td>"Запиши: EC 2.1, pH 6.2"</td>
+<td>GPT-4o-mini</td>
+</tr>
+<tr>
+<td><strong>pepino-maps-tools</strong></td>
+<td>Маршрут, расстояние, расход</td>
+<td>Gemini Flash</td>
+</tr>
+<tr>
+<td><strong>pepino-knowledge</strong> (режим поиска)</td>
+<td>"Найди SOP по X"</td>
+<td>GPT-4o-mini</td>
+</tr>
+<tr>
+<td><strong>pepino-team-ops</strong> (простые)</td>
+<td>"Поставь задачу Хуану"</td>
+<td>Gemini Flash</td>
+</tr>
+<tr>
+<td><strong>pepino-finance-tools</strong> (курсы)</td>
+<td>"Курс Blue"</td>
+<td>Llama 8B (Groq)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Критерии автоопределения:</strong>
+- Prompt &lt; 500 токенов
+- Intent = <code>data_entry</code>, <code>lookup</code>, <code>format</code>, <code>translate</code>
+- Нет слов "почему", "проанализируй", "стратегия", "что если"
+- Ожидаемый output &lt; 200 токенов</p>
+<p><strong>Стоимость:</strong> ~$0.002/задача × 1800/мес = <strong>$3.60/мес</strong></p>
+<hr />
+<h3>Tier 2 — Средние ($0.01-0.05/задача)</h3>
+<p>Задачи: анализ, рекомендации, отчёты, контент.</p>
+<table>
+<thead>
+<tr>
+<th>Скилл</th>
+<th>Типичные задачи</th>
+<th>Модель</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>pepino-sales-crm</strong></td>
+<td>КП, pipeline, follow-up</td>
+<td>DeepSeek V3</td>
+</tr>
+<tr>
+<td><strong>pepino-procurement</strong></td>
+<td>Оценка поставщика, заказы</td>
+<td>Kimi K2.5</td>
+</tr>
+<tr>
+<td><strong>pepino-brand</strong></td>
+<td>Instagram пост, контент-план</td>
+<td>DeepSeek V3</td>
+</tr>
+<tr>
+<td><strong>pepino-controller</strong> (отчёты)</td>
+<td>Бюджет vs факт</td>
+<td>Kimi K2.5</td>
+</tr>
+<tr>
+<td><strong>pepino-demand-oracle</strong></td>
+<td>Прогноз спроса (недельный)</td>
+<td>DeepSeek V3</td>
+</tr>
+<tr>
+<td><strong>pepino-weekly-review</strong></td>
+<td>Еженедельная сводка</td>
+<td>Claude Haiku</td>
+</tr>
+<tr>
+<td><strong>pepino-agro-ops</strong> (анализ)</td>
+<td>"Тренд урожайности"</td>
+<td>Kimi K2.5</td>
+</tr>
+<tr>
+<td><strong>pepino-climate-guard</strong></td>
+<td>Диагностика микроклимата</td>
+<td>DeepSeek V3</td>
+</tr>
+<tr>
+<td><strong>pepino-risk</strong> (мониторинг)</td>
+<td>Текущие риски, EWI</td>
+<td>Kimi K2.5</td>
+</tr>
+<tr>
+<td><strong>pepino-argentina-finance</strong></td>
+<td>FX мониторинг, pricing</td>
+<td>DeepSeek V3</td>
+</tr>
+<tr>
+<td><strong>pepino-profit-engine</strong> (дашборд)</td>
+<td>Маржа по продуктам</td>
+<td>DeepSeek V3</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Критерии автоопределения:</strong>
+- Prompt 500-3000 токенов
+- Intent = <code>analysis</code>, <code>report</code>, <code>recommend</code>, <code>content</code>, <code>forecast</code>
+- Требуется рассуждение, но не стратегическое
+- Ожидаемый output 200-1500 токенов</p>
+<p><strong>Стоимость:</strong> ~$0.02/задача × 900/мес = <strong>$18/мес</strong></p>
+<hr />
+<h3>Tier 3 — Сложные ($0.05-0.30/задача)</h3>
+<p>Задачи: стратегия, моделирование, креатив, экспертиза.</p>
+<table>
+<thead>
+<tr>
+<th>Скилл</th>
+<th>Типичные задачи</th>
+<th>Модель</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>pepino-shadow-ceo</strong></td>
+<td>Decision Framework, координация</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-financial-modeling</strong></td>
+<td>DCF, сценарии P&amp;L</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-profit-engine</strong> (эксперименты)</td>
+<td>Kill/Iterate/Scale решения</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-innovation-lab</strong></td>
+<td>R&amp;D, новые продукты</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-capital</strong></td>
+<td>CAPEX planning, pitch</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-realtor</strong></td>
+<td>Оценка участка (40+ критериев)</td>
+<td>GPT-4o</td>
+</tr>
+<tr>
+<td><strong>pepino-greenhouse-tech</strong></td>
+<td>PPFD/HVAC расчёты</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-sales-crm</strong> (стратегия)</td>
+<td>Retention strategy, churn</td>
+<td>Claude Sonnet</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Критерии автоопределения:</strong>
+- Prompt &gt; 3000 токенов ИЛИ
+- Intent = <code>strategy</code>, <code>model</code>, <code>experiment</code>, <code>architecture</code>, <code>creative</code>
+- Слова: "что если", "сценарий", "стратегия", "рассчитай NPV", "DCF"
+- Ожидаемый output &gt; 1500 токенов</p>
+<p><strong>Стоимость:</strong> ~$0.10/задача × 250/мес = <strong>$25/мес</strong></p>
+<hr />
+<h3>Tier 4 — Критические ($0.20-1.00/задача)</h3>
+<p>Задачи: решения с юридическими/финансовыми последствиями.</p>
+<table>
+<thead>
+<tr>
+<th>Скилл</th>
+<th>Типичные задачи</th>
+<th>Модель</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>pepino-qa-food-safety</strong> (release)</td>
+<td>Выпуск/блокировка партии</td>
+<td>Claude Sonnet + верификация</td>
+</tr>
+<tr>
+<td><strong>pepino-legal</strong></td>
+<td>Договоры, SENASA compliance</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-controller</strong> (блокировки)</td>
+<td>Платежи &gt; 250K, CAPEX &gt; 1M</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-shadow-ceo</strong> (guardrails)</td>
+<td>Проверка решений CEO</td>
+<td>Claude Sonnet</td>
+</tr>
+<tr>
+<td><strong>pepino-procurement</strong> (DD)</td>
+<td>Due Diligence поставщика</td>
+<td>Claude Sonnet</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Критерии автоопределения:</strong>
+- Skill имеет флаг <code>critical: true</code>
+- Intent содержит <code>approval</code>, <code>release</code>, <code>contract</code>, <code>audit</code>
+- Dispatcher hard_block активирован
+- Сумма &gt; 250K ARS или решение с юридическими последствиями</p>
+<p><strong>Двойная проверка:</strong>
+1. Основная модель генерирует ответ
+2. Второй вызов (та же или другая модель) верифицирует ключевые факты
+3. При расхождении — эскалация на человека</p>
+<p><strong>Стоимость:</strong> ~$0.40/задача × 50/мес = <strong>$20/мес</strong></p>
+<hr />
+<h2>Итоговая экономика</h2>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Задач/мес</th>
+<th>Стоимость/задача</th>
+<th>Итого/мес</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T1 Простые</td>
+<td>1,800 (60%)</td>
+<td>$0.002</td>
+<td>$3.60</td>
+</tr>
+<tr>
+<td>T2 Средние</td>
+<td>900 (30%)</td>
+<td>$0.020</td>
+<td>$18.00</td>
+</tr>
+<tr>
+<td>T3 Сложные</td>
+<td>250 (8%)</td>
+<td>$0.100</td>
+<td>$25.00</td>
+</tr>
+<tr>
+<td>T4 Критические</td>
+<td>50 (2%)</td>
+<td>$0.400</td>
+<td>$20.00</td>
+</tr>
+<tr>
+<td><strong>ИТОГО</strong></td>
+<td><strong>3,000</strong></td>
+<td><strong>$0.022 avg</strong></td>
+<td><strong>$66.60</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>vs текущий подход (всё через Sonnet): ~$200/мес</strong>
+<strong>Экономия: ~67% ($133/мес)</strong></p>
+<hr />
+<h2>Cascading: автоматическая эскалация</h2>
+<p>Если дешёвая модель не справилась, запрос автоматически переходит на следующий уровень:</p>
+<pre><code>T1 модель → ответ некачественный? → T2 модель → ответ некачественный? → T3 модель
+</code></pre>
+<h3>Как определить "некачественный ответ"</h3>
+<table>
+<thead>
+<tr>
+<th>Сигнал</th>
+<th>Проверка</th>
+<th>Действие</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Пустой ответ</td>
+<td><code>response.length &lt; 10</code></td>
+<td>Escalate</td>
+</tr>
+<tr>
+<td>"Я не могу"</td>
+<td>Regex: <code>не могу|cannot|sorry</code></td>
+<td>Escalate</td>
+</tr>
+<tr>
+<td>JSON невалидный</td>
+<td><code>JSON.parse()</code> fails</td>
+<td>Escalate</td>
+</tr>
+<tr>
+<td>Числа нереальные</td>
+<td>Value &gt; 10x median</td>
+<td>Escalate</td>
+</tr>
+<tr>
+<td>Нет ключевых полей</td>
+<td>Missing required fields</td>
+<td>Escalate</td>
+</tr>
+<tr>
+<td>Галлюцинация</td>
+<td>Факт не найден в источнике</td>
+<td>Escalate</td>
+</tr>
+</tbody>
+</table>
+<h3>Cascading flow (конкретный пример)</h3>
+<pre><code>Запрос: &quot;Маржа по вешенке за март&quot;
+
+1. [Gemini Flash] → ответ: {&quot;product&quot;: &quot;вешенка&quot;, &quot;margin&quot;: 0.43}
+   ✅ JSON валиден, число реальное (0-1 range) → RETURN
+
+Запрос: &quot;Что если поднять цены на 15%?&quot;
+
+1. [Gemini Flash] → ответ: &quot;Нужно больше данных для анализа...&quot;
+   ❌ Слишком короткий, нет конкретики → ESCALATE
+2. [DeepSeek V3] → ответ: сценарий с 3 вариантами, NPV, impact
+   ✅ Развёрнутый ответ с числами → RETURN
+</code></pre>
+<hr />
+<h2>Провайдерская матрица</h2>
+<h3>Основные провайдеры</h3>
+<table>
+<thead>
+<tr>
+<th>Провайдер</th>
+<th>Модели</th>
+<th>Input $/1M</th>
+<th>Output $/1M</th>
+<th>Latency</th>
+<th>Uptime</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Groq</strong></td>
+<td>Llama 3.x 8B/70B</td>
+<td>$0.05-0.59</td>
+<td>$0.08-0.79</td>
+<td>Очень низкая</td>
+<td>99%+</td>
+</tr>
+<tr>
+<td><strong>DeepSeek</strong></td>
+<td>V3</td>
+<td>$0.27</td>
+<td>$1.10</td>
+<td>Средняя</td>
+<td>95%+</td>
+</tr>
+<tr>
+<td><strong>Google</strong></td>
+<td>Gemini Flash</td>
+<td>$0.075</td>
+<td>$0.30</td>
+<td>Низкая</td>
+<td>99.5%+</td>
+</tr>
+<tr>
+<td><strong>OpenAI</strong></td>
+<td>GPT-4o-mini</td>
+<td>$0.15</td>
+<td>$0.60</td>
+<td>Средняя</td>
+<td>99.5%+</td>
+</tr>
+<tr>
+<td><strong>Anthropic</strong></td>
+<td>Claude Haiku</td>
+<td>$0.80</td>
+<td>$4.00</td>
+<td>Средняя</td>
+<td>99.5%+</td>
+</tr>
+<tr>
+<td><strong>Anthropic</strong></td>
+<td>Claude Sonnet</td>
+<td>$3.00</td>
+<td>$15.00</td>
+<td>Средняя</td>
+<td>99.5%+</td>
+</tr>
+<tr>
+<td><strong>Kimi</strong></td>
+<td>K2.5</td>
+<td>~$0.50</td>
+<td>~$2.00</td>
+<td>Средняя</td>
+<td>95%+</td>
+</tr>
+</tbody>
+</table>
+<h3>Fallback chains</h3>
+<pre><code>Tier 1: Gemini Flash → GPT-4o-mini → Llama 8B (Groq) → Claude Haiku
+Tier 2: DeepSeek V3 → Kimi K2.5 → Claude Haiku → GPT-4o
+Tier 3: Claude Sonnet → GPT-4o → Gemini Pro → DeepSeek V3
+Tier 4: Claude Sonnet → GPT-4o → Claude Sonnet (retry)
+</code></pre>
+<hr />
+<h2>Система KPI</h2>
+<h3>Dashboard метрики (обновляется ежедневно)</h3>
+<table>
+<thead>
+<tr>
+<th>KPI</th>
+<th>Формула</th>
+<th>Цель</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cost per task</strong></td>
+<td>total_spend / total_tasks</td>
+<td>&lt; $0.025</td>
+</tr>
+<tr>
+<td><strong>Cheap pass rate</strong></td>
+<td>T1_successful / T1_total</td>
+<td>&gt; 85%</td>
+</tr>
+<tr>
+<td><strong>Escalation rate</strong></td>
+<td>escalated_tasks / total_tasks</td>
+<td>&lt; 15%</td>
+</tr>
+<tr>
+<td><strong>Quality score</strong></td>
+<td>human_approved / total_reviewed</td>
+<td>&gt; 95%</td>
+</tr>
+<tr>
+<td><strong>Avg latency</strong></td>
+<td>sum(response_time) / total_tasks</td>
+<td>&lt; 5s</td>
+</tr>
+<tr>
+<td><strong>Premium share</strong></td>
+<td>(T3+T4_tasks) / total_tasks</td>
+<td>&lt; 12%</td>
+</tr>
+<tr>
+<td><strong>Budget utilization</strong></td>
+<td>actual_spend / monthly_budget</td>
+<td>&lt; 100%</td>
+</tr>
+<tr>
+<td><strong>Cache hit rate</strong></td>
+<td>cached_responses / total_tasks</td>
+<td>&gt; 20%</td>
+</tr>
+<tr>
+<td><strong>Provider diversity</strong></td>
+<td>unique_providers_used / total_providers</td>
+<td>&gt; 60%</td>
+</tr>
+</tbody>
+</table>
+<h3>Алерты</h3>
+<table>
+<thead>
+<tr>
+<th>Алерт</th>
+<th>Условие</th>
+<th>Действие</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Budget warning</td>
+<td>spend &gt; 80% monthly budget</td>
+<td>Уведомление CEO</td>
+</tr>
+<tr>
+<td>Budget exceeded</td>
+<td>spend &gt; 100% monthly budget</td>
+<td>Переключить T2→T1</td>
+</tr>
+<tr>
+<td>Quality drop</td>
+<td>quality_score &lt; 90%</td>
+<td>Escalate более T3</td>
+</tr>
+<tr>
+<td>Provider down</td>
+<td>3 consecutive errors</td>
+<td>Failover автоматически</td>
+</tr>
+<tr>
+<td>Cost spike</td>
+<td>daily_cost &gt; 3x avg</td>
+<td>Расследование</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Оптимизации</h2>
+<h3>1. Кэширование (экономия ~20%)</h3>
+<table>
+<thead>
+<tr>
+<th>Тип</th>
+<th>Что кэшируется</th>
+<th>TTL</th>
+<th>Экономия</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exact match</td>
+<td>Идентичные запросы</td>
+<td>24h</td>
+<td>5%</td>
+</tr>
+<tr>
+<td>Semantic cache</td>
+<td>Похожие по смыслу запросы (cosine &gt; 0.95)</td>
+<td>12h</td>
+<td>10%</td>
+</tr>
+<tr>
+<td>KPI cache</td>
+<td>"Какая маржа?", "Сколько клиентов?"</td>
+<td>1h</td>
+<td>5%</td>
+</tr>
+</tbody>
+</table>
+<h3>2. Prompt compression (экономия ~15%)</h3>
+<table>
+<thead>
+<tr>
+<th>Техника</th>
+<th>Описание</th>
+<th>Экономия токенов</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>System prompt trimming</td>
+<td>Убрать неиспользуемые режимы из контекста</td>
+<td>30-50% input</td>
+</tr>
+<tr>
+<td>Context window management</td>
+<td>Только релевантные данные, не вся таблица</td>
+<td>20-40% input</td>
+</tr>
+<tr>
+<td>Response format hints</td>
+<td>JSON schema вместо "ответь в формате..."</td>
+<td>10-20% input</td>
+</tr>
+<tr>
+<td>History pruning</td>
+<td>Только последние 3 обмена, не вся история</td>
+<td>30-60% input</td>
+</tr>
+</tbody>
+</table>
+<h3>3. Batching (экономия ~10%)</h3>
+<pre><code>Утренний бриф: вместо 5 отдельных вызовов (KPI + алерты + погода + курс + задачи)
+→ 1 batch-вызов с 5 промптами = 1 вызов API
+Экономия: 4 × overhead = ~40% на этой задаче
+</code></pre>
+<hr />
+<h2>Мониторинг и отчёты</h2>
+<h3>Ежедневный отчёт (автоматический)</h3>
+<pre><code>📊 AI Costs — 20 марта 2026
+
+Задач:     127 (T1: 78, T2: 35, T3: 12, T4: 2)
+Расход:    $2.84
+Avg/task:  $0.022
+Escalated: 8 (6.3%)
+Cached:    24 (18.9%)
+
+Топ-3 дорогих:
+1. pepino-financial-modeling: $0.89 (3 задачи)
+2. pepino-shadow-ceo: $0.45 (2 задачи)
+3. pepino-sales-crm: $0.38 (8 задач)
+
+Budget: $66.60/мес → использовано $38.20 (57%)
+</code></pre>
+<h3>Еженедельный отчёт</h3>
+<pre><code>📊 AI Costs — Неделя 12/2026
+
+Задач:      890
+Расход:     $19.80
+Avg/task:   $0.022
+Cheap rate: 87.2% ✅
+Quality:    96.1% ✅
+Escalated:  11.4% ✅
+
+Экономия vs all-Sonnet: $47.20 (70.5%)
+
+Рекомендации:
+• pepino-brand можно перевести T2→T1 (качество стабильно)
+• pepino-procurement DD лучше оставить T3 (2 эскалации за неделю)
+</code></pre>
+<hr />
+<h2>Реализация</h2>
+<h3>Фаза 1 — Rule-based Router (неделя 1)</h3>
+<p>Простой роутер на основе правил:</p>
+<pre><code class="language-javascript">// llm-router.cjs
+
+const TIER_RULES = {
+  // Tier 1: Simple
+  tier1: {
+    skills: ['pepino-google-sheets', 'pepino-maps-tools'],
+    intents: ['data_entry', 'lookup', 'format', 'translate', 'status_check'],
+    maxInputTokens: 500,
+    keywords_exclude: ['почему', 'проанализируй', 'стратегия', 'что если', 'сценарий'],
+    model: 'gemini-2.0-flash',
+    fallback: 'gpt-4o-mini'
+  },
+
+  // Tier 2: Medium
+  tier2: {
+    skills: ['pepino-sales-crm', 'pepino-procurement', 'pepino-brand', 'pepino-demand-oracle'],
+    intents: ['analysis', 'report', 'recommend', 'content', 'forecast', 'monitor'],
+    model: 'deepseek-chat',
+    fallback: 'claude-3-5-haiku-latest'
+  },
+
+  // Tier 3: Complex
+  tier3: {
+    skills: ['pepino-shadow-ceo', 'pepino-financial-modeling', 'pepino-innovation-lab'],
+    intents: ['strategy', 'model', 'experiment', 'architecture', 'creative'],
+    model: 'claude-sonnet-4-20250514',
+    fallback: 'gpt-4o'
+  },
+
+  // Tier 4: Critical
+  tier4: {
+    skills: ['pepino-qa-food-safety', 'pepino-legal'],
+    intents: ['approval', 'release', 'contract', 'audit'],
+    hardBlock: true,
+    model: 'claude-sonnet-4-20250514',
+    verify: true
+  }
+};
+
+function classifyTier(skill, intent, prompt) {
+  // Critical override
+  if (TIER_RULES.tier4.skills.includes(skill) ||
+      TIER_RULES.tier4.intents.includes(intent)) {
+    return 'tier4';
+  }
+
+  // Complex
+  if (TIER_RULES.tier3.skills.includes(skill) ||
+      TIER_RULES.tier3.intents.includes(intent) ||
+      prompt.length &gt; 3000) {
+    return 'tier3';
+  }
+
+  // Simple check
+  const hasComplexKeywords = TIER_RULES.tier1.keywords_exclude
+    .some(kw =&gt; prompt.toLowerCase().includes(kw));
+
+  if (!hasComplexKeywords &amp;&amp;
+      (TIER_RULES.tier1.skills.includes(skill) ||
+       TIER_RULES.tier1.intents.includes(intent) ||
+       prompt.length &lt; 500)) {
+    return 'tier1';
+  }
+
+  // Default: medium
+  return 'tier2';
+}
+</code></pre>
+<h3>Фаза 2 — Cost Tracker + Dashboard (неделя 2)</h3>
+<ul>
+<li>Логирование каждого вызова: <code>{timestamp, skill, tier, model, input_tokens, output_tokens, cost, latency, quality}</code></li>
+<li>Ежедневный отчёт в Telegram (silent)</li>
+<li>Grafana дашборд "AI Costs"</li>
+</ul>
+<h3>Фаза 3 — Cascading + Quality Checker (неделя 3)</h3>
+<ul>
+<li>Автоматическая эскалация при некачественном ответе</li>
+<li>JSON validation, length check, hallucination detection</li>
+<li>Метрики escalation rate</li>
+</ul>
+<h3>Фаза 4 — ML-based Router (месяц 2)</h3>
+<ul>
+<li>Сбор данных за 30 дней</li>
+<li>Обучение классификатора на реальных задачах</li>
+<li>A/B тестирование vs rule-based</li>
+<li>Замена rule-based если ML лучше</li>
+</ul>
+<hr />
+<h2>Сравнение вариантов реализации</h2>
+<table>
+<thead>
+<tr>
+<th>Вариант</th>
+<th>Плюсы</th>
+<th>Минусы</th>
+<th>Стоимость</th>
+<th>Рекомендация</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>OpenRouter Auto</strong></td>
+<td>Zero setup, работает сразу</td>
+<td>Markup 5-20%, нет контроля</td>
+<td>$80-120/мес</td>
+<td>Быстрый старт</td>
+</tr>
+<tr>
+<td><strong>LiteLLM self-hosted</strong></td>
+<td>Полный контроль, fallback, cost tracking</td>
+<td>Нужно развернуть, поддерживать</td>
+<td>$50-70/мес + DevOps</td>
+<td>Лучший баланс</td>
+</tr>
+<tr>
+<td><strong>Custom Router (наш)</strong></td>
+<td>Максимальный контроль, заточен под Pepino</td>
+<td>Разработка, тестирование</td>
+<td>$40-70/мес + Dev time</td>
+<td>Оптимально долгосрочно</td>
+</tr>
+<tr>
+<td><strong>RouteLLM + LiteLLM</strong></td>
+<td>ML routing + proxy в одном</td>
+<td>Сложнее, нужны данные для обучения</td>
+<td>$40-60/мес + setup</td>
+<td>Фаза 4</td>
+</tr>
+</tbody>
+</table>
+<h3>Рекомендация</h3>
+<p><strong>Фаза 1-3:</strong> Custom Router (простые правила) — 0 внешних зависимостей, работает сразу.
+<strong>Фаза 4:</strong> Добавить LiteLLM как proxy для multi-provider fallback + cost tracking.
+<strong>Фаза 5:</strong> Добавить RouteLLM для ML-based routing если данных достаточно (&gt;5000 задач).</p>
+<hr />
+<h2>Контрольный чеклист внедрения</h2>
+<h3>Неделя 1</h3>
+<ul>
+<li>[ ] Создать <code>llm-router.cjs</code> с rule-based классификатором</li>
+<li>[ ] Интегрировать с pepino-dispatcher (добавить tier в case_id)</li>
+<li>[ ] Настроить API ключи: Groq, DeepSeek, Google AI, OpenAI</li>
+<li>[ ] Тестовый прогон: 50 задач через router</li>
+</ul>
+<h3>Неделя 2</h3>
+<ul>
+<li>[ ] Cost tracker: логирование в Google Sheets лист "AI Costs"</li>
+<li>[ ] Telegram отчёт: ежедневный silent, еженедельный loud</li>
+<li>[ ] Grafana дашборд "AI Costs"</li>
+<li>[ ] Бюджет: установить $80/мес лимит</li>
+</ul>
+<h3>Неделя 3</h3>
+<ul>
+<li>[ ] Cascading: автоэскалация при низком качестве</li>
+<li>[ ] Quality checker: JSON validation + length + keywords</li>
+<li>[ ] Fallback chains: протестировать все 4 цепочки</li>
+<li>[ ] Alert system: budget warning + provider down</li>
+</ul>
+<h3>Месяц 2</h3>
+<ul>
+<li>[ ] Анализ данных: 30 дней логов</li>
+<li>[ ] A/B тест: rule-based vs adjusted rules</li>
+<li>[ ] Cache layer: semantic caching для Top-20 запросов</li>
+<li>[ ] Prompt compression: audit Top-10 самых дорогих скиллов</li>
+</ul>
+<hr />
+<p><em>Pepino Pick LLM Routing System v1.0 — оптимальная модель для каждой задачи.</em></p>
+</body>
+</html>
