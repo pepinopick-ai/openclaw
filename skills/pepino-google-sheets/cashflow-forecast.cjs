@@ -412,38 +412,52 @@ async function main() {
   const startMs = Date.now();
   console.log(`[${new Date().toISOString()}] Cash flow forecast starting...`);
 
+  // Throttled Telegram sender (dedup + rate limit + quiet hours)
+  let sendThrottled;
+  try { sendThrottled = require("./notification-throttle.cjs").sendThrottled; } catch { sendThrottled = null; }
+
+  // farm-state cache (avoids direct Sheets API calls when fresh)
+  let farmState = null;
+  try { farmState = await require("./farm-state.cjs").getState(); } catch {}
+
   /** @type {Record<string, string>[]} */
   let sales;
   /** @type {Record<string, string>[]} */
   let expenses;
 
-  // Загрузка данных: прямой доступ к Sheets с fallback на API
-  try {
-    const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
+  // Загрузка данных: кеш → прямые Sheets → API
+  if (farmState) {
+    sales = farmState.sales || [];
+    expenses = farmState.expenses || [];
+    console.log(`[cache] Данные из farm-state (возраст: ${Math.round((Date.now() - new Date(farmState.updatedAt || 0)) / 60000)}мин)`);
+  } else {
+    try {
+      const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
 
-    const toJson = (/** @type {string[][]} */ rows) => {
-      if (!rows || rows.length < 2) return [];
-      const headers = rows[0];
-      return rows.slice(1).map((row) => {
-        /** @type {Record<string, string>} */
-        const obj = {};
-        headers.forEach((h, i) => {
-          obj[h] = row[i] || "";
+      const toJson = (/** @type {string[][]} */ rows) => {
+        if (!rows || rows.length < 2) return [];
+        const headers = rows[0];
+        return rows.slice(1).map((row) => {
+          /** @type {Record<string, string>} */
+          const obj = {};
+          headers.forEach((h, i) => {
+            obj[h] = row[i] || "";
+          });
+          return obj;
         });
-        return obj;
-      });
-    };
+      };
 
-    const [salesRows, expRows] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
-    ]);
+      const [salesRows, expRows] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
+      ]);
 
-    sales = toJson(salesRows);
-    expenses = toJson(expRows);
-  } catch (err) {
-    console.log(`Direct sheet read failed (${err.message}), using API...`);
-    [sales, expenses] = await Promise.all([fetchJson("/sales"), fetchJson("/expenses")]);
+      sales = toJson(salesRows);
+      expenses = toJson(expRows);
+    } catch (err) {
+      console.log(`Direct sheet read failed (${err.message}), using API...`);
+      [sales, expenses] = await Promise.all([fetchJson("/sales"), fetchJson("/expenses")]);
+    }
   }
 
   console.log(`Sales: ${sales.length}, Expenses: ${expenses.length}`);
@@ -462,7 +476,8 @@ async function main() {
   // Отправка в Telegram
   if (SEND_TG) {
     try {
-      await telegramSend(report);
+      const sender = sendThrottled || telegramSend;
+      await sender(report, sendThrottled ? { thread: TG_THREAD_ID, parseMode: "HTML", priority: "normal" } : undefined);
       console.log("[OK] Forecast sent to Telegram thread 20");
     } catch (err) {
       console.error(`[ERROR] Telegram: ${err.message}`);

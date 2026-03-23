@@ -596,47 +596,66 @@ async function main() {
     `[${new Date().toISOString()}] Daily ops checklist starting...${DRY_RUN ? " (DRY RUN)" : ""}`,
   );
 
-  // Импорт sheets.js (ESM из CJS)
-  /** @type {{ readSheet: Function, appendToSheet: Function, PEPINO_SHEETS_ID: string }} */
-  let readSheet, PEPINO_SHEETS_ID;
-  try {
-    const sheetsModule = await import("./sheets.js");
-    readSheet = sheetsModule.readSheet;
-    PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
-  } catch (err) {
-    console.error(`[daily-ops-checklist] Не удалось импортировать sheets.js: ${err.message}`);
-    process.exit(1);
-  }
+  // Throttled Telegram sender (dedup + rate limit + quiet hours)
+  let sendThrottled;
+  try { sendThrottled = require("./notification-throttle.cjs").sendThrottled; } catch { sendThrottled = null; }
 
-  // Параллельное чтение всех листов
-  let productionRaw, salesRaw, inventoryRaw, tasksRaw, alertsRaw;
-  try {
-    [productionRaw, salesRaw, inventoryRaw, tasksRaw, alertsRaw] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "🌿 Производство"),
-      readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "📦 Склад"),
-      readSheet(PEPINO_SHEETS_ID, "📋 Задачи"),
-      readSheet(PEPINO_SHEETS_ID, "⚠️ Алерты"),
-    ]);
-  } catch (err) {
-    const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
-    console.error(`[daily-ops-checklist] ${msg}`);
-    if (!DRY_RUN) {
-      await send(`⚠️ Daily Ops Checklist FAIL\n${msg}`, {
-        silent: false,
-        threadId: TG_THREAD_OPS,
-        parseMode: "HTML",
-      });
+  // farm-state cache (avoids direct Sheets API calls when fresh)
+  let farmState = null;
+  try { farmState = await require("./farm-state.cjs").getState(); } catch {}
+
+  // Загрузка данных — из кеша или напрямую
+  let productionRows, salesRows, inventoryRows, taskRows, alertRows;
+
+  if (farmState) {
+    productionRows = farmState.production || [];
+    salesRows = farmState.sales || [];
+    inventoryRows = farmState.inventory || [];
+    taskRows = farmState.tasks || [];
+    alertRows = farmState.alerts || [];
+    console.error(`[daily-ops-checklist] Данные из farm-state (возраст: ${Math.round((Date.now() - new Date(farmState.updatedAt || 0)) / 60000)}мин)`);
+  } else {
+    // Импорт sheets.js (ESM из CJS)
+    /** @type {{ readSheet: Function, appendToSheet: Function, PEPINO_SHEETS_ID: string }} */
+    let readSheet, PEPINO_SHEETS_ID;
+    try {
+      const sheetsModule = await import("./sheets.js");
+      readSheet = sheetsModule.readSheet;
+      PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
+    } catch (err) {
+      console.error(`[daily-ops-checklist] Не удалось импортировать sheets.js: ${err.message}`);
+      process.exit(1);
     }
-    process.exit(1);
-  }
 
-  // Парсинг строк в объекты
-  const productionRows = rowsToObjects(productionRaw);
-  const salesRows = rowsToObjects(salesRaw);
-  const inventoryRows = rowsToObjects(inventoryRaw);
-  const taskRows = rowsToObjects(tasksRaw);
-  const alertRows = rowsToObjects(alertsRaw);
+    // Параллельное чтение всех листов
+    let productionRaw, salesRaw, inventoryRaw, tasksRaw, alertsRaw;
+    try {
+      [productionRaw, salesRaw, inventoryRaw, tasksRaw, alertsRaw] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "🌿 Производство"),
+        readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "📦 Склад"),
+        readSheet(PEPINO_SHEETS_ID, "📋 Задачи"),
+        readSheet(PEPINO_SHEETS_ID, "⚠️ Алерты"),
+      ]);
+    } catch (err) {
+      const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
+      console.error(`[daily-ops-checklist] ${msg}`);
+      if (!DRY_RUN) {
+        await send(`⚠️ Daily Ops Checklist FAIL\n${msg}`, {
+          silent: false,
+          threadId: TG_THREAD_OPS,
+          parseMode: "HTML",
+        });
+      }
+      process.exit(1);
+    }
+
+    productionRows = rowsToObjects(productionRaw);
+    salesRows = rowsToObjects(salesRaw);
+    inventoryRows = rowsToObjects(inventoryRaw);
+    taskRows = rowsToObjects(tasksRaw);
+    alertRows = rowsToObjects(alertsRaw);
+  }
 
   console.error(
     `[daily-ops-checklist] Загружено: производство=${productionRows.length}, ` +
@@ -686,15 +705,16 @@ async function main() {
         checklist.length > MAX_TG
           ? checklist.slice(0, MAX_TG) + "\n\n<i>...обрезано (полный чеклист в Задачах)</i>"
           : checklist;
-      const result = await send(tgMsg, {
-        silent: false,
-        threadId: TG_THREAD_OPS,
-        parseMode: "HTML",
-      });
-      if (result.ok) {
+      const sender = sendThrottled || send;
+      const result = await sender(tgMsg, sendThrottled
+        ? { thread: TG_THREAD_OPS, parseMode: "HTML", priority: "normal", silent: false }
+        : { silent: false, threadId: TG_THREAD_OPS, parseMode: "HTML" });
+      if (result && result.ok) {
         console.error("[daily-ops-checklist] Чеклист отправлен в Telegram");
-      } else {
+      } else if (result && result.error) {
         console.error(`[daily-ops-checklist] Telegram ошибка: ${result.error}`);
+      } else {
+        console.error("[daily-ops-checklist] Чеклист отправлен в Telegram");
       }
     } catch (err) {
       console.error(`[daily-ops-checklist] Ошибка отправки в Telegram: ${err.message}`);

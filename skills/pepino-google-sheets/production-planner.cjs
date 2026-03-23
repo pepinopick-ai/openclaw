@@ -596,45 +596,61 @@ async function main() {
   const timestamp = new Date().toISOString();
   console.error(`[${timestamp}] Запуск production-planner...${DRY_RUN ? " (DRY RUN)" : ""}`);
 
-  // Динамический импорт ESM-модуля sheets.js из CJS
-  /** @type {{ readSheet: Function, appendToSheet: Function, PEPINO_SHEETS_ID: string }} */
-  let readSheet, appendToSheet, PEPINO_SHEETS_ID;
-  try {
-    const sheetsModule = await import("./sheets.js");
-    readSheet = sheetsModule.readSheet;
-    appendToSheet = sheetsModule.appendToSheet;
-    PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
-  } catch (err) {
-    console.error(`[production-planner] Не удалось импортировать sheets.js: ${err.message}`);
-    process.exit(1);
-  }
+  // Throttled Telegram sender (dedup + rate limit + quiet hours)
+  let sendThrottled;
+  try { sendThrottled = require("./notification-throttle.cjs").sendThrottled; } catch { sendThrottled = null; }
 
-  // Параллельное чтение трёх листов + запрос погоды
-  let salesRaw, productionRaw, inventoryRaw;
+  // farm-state cache (avoids direct Sheets API calls when fresh)
+  let farmState = null;
+  try { farmState = await require("./farm-state.cjs").getState(); } catch {}
+
+  // Загрузка данных — из кеша или напрямую + запрос погоды
+  let salesRows, productionRows, inventoryRows;
   /** @type {{temp_max: number, temp_min: number, humidity_max: number, description: string}|null} */
   let weather = null;
 
-  try {
-    const [salesRes, productionRes, inventoryRes, weatherRes] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "\u{1F6D2} Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
-      fetchWeather().catch(() => null),
-    ]);
-    salesRaw = salesRes;
-    productionRaw = productionRes;
-    inventoryRaw = inventoryRes;
-    weather = weatherRes;
-  } catch (err) {
-    const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
-    console.error(`[production-planner] ${msg}`);
-    process.exit(1);
-  }
+  if (farmState) {
+    salesRows = farmState.sales || [];
+    productionRows = farmState.production || [];
+    inventoryRows = farmState.inventory || [];
+    console.error(`[production-planner] Данные из farm-state (возраст: ${Math.round((Date.now() - new Date(farmState.updatedAt || 0)) / 60000)}мин)`);
+    weather = await fetchWeather().catch(() => null);
+  } else {
+    // Динамический импорт ESM-модуля sheets.js из CJS
+    /** @type {{ readSheet: Function, appendToSheet: Function, PEPINO_SHEETS_ID: string }} */
+    let readSheet, PEPINO_SHEETS_ID;
+    try {
+      const sheetsModule = await import("./sheets.js");
+      readSheet = sheetsModule.readSheet;
+      PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
+    } catch (err) {
+      console.error(`[production-planner] Не удалось импортировать sheets.js: ${err.message}`);
+      process.exit(1);
+    }
 
-  // Парсинг
-  const salesRows = rowsToObjects(salesRaw);
-  const productionRows = rowsToObjects(productionRaw);
-  const inventoryRows = rowsToObjects(inventoryRaw);
+    // Параллельное чтение трёх листов + запрос погоды
+    let salesRaw, productionRaw, inventoryRaw;
+    try {
+      const [salesRes, productionRes, inventoryRes, weatherRes] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "\u{1F6D2} Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
+        fetchWeather().catch(() => null),
+      ]);
+      salesRaw = salesRes;
+      productionRaw = productionRes;
+      inventoryRaw = inventoryRes;
+      weather = weatherRes;
+    } catch (err) {
+      const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
+      console.error(`[production-planner] ${msg}`);
+      process.exit(1);
+    }
+
+    salesRows = rowsToObjects(salesRaw);
+    productionRows = rowsToObjects(productionRaw);
+    inventoryRows = rowsToObjects(inventoryRaw);
+  }
 
   console.error(
     `[production-planner] Загружено: продажи=${salesRows.length}, ` +
@@ -692,7 +708,8 @@ async function main() {
 
   if (!DRY_RUN && taskRows.length > 0) {
     try {
-      await appendToSheet(PEPINO_SHEETS_ID, taskRows, "\u{1F4CB} Задачи");
+      const { appendToSheet: appendFn, PEPINO_SHEETS_ID: sheetId } = await import("./sheets.js");
+      await appendFn(sheetId, taskRows, "\u{1F4CB} Задачи");
       console.error(`[production-planner] Записано ${taskRows.length} задач в "Задачи"`);
     } catch (err) {
       console.error(`[production-planner] Ошибка записи в Sheets: ${err.message}`);
@@ -706,7 +723,8 @@ async function main() {
 
   if (!DRY_RUN) {
     try {
-      await sendReport(report, TG_THREAD_PRODUCTION, "HTML");
+      const sender = sendThrottled || sendReport;
+      await sender(report, sendThrottled ? { thread: TG_THREAD_PRODUCTION, parseMode: "HTML", priority: "normal" } : TG_THREAD_PRODUCTION, sendThrottled ? undefined : "HTML");
       console.error("[production-planner] Отчёт отправлен в Telegram");
     } catch (err) {
       console.error(`[production-planner] Ошибка отправки в Telegram: ${err.message}`);

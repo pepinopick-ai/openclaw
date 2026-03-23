@@ -402,40 +402,57 @@ async function main() {
   const timestamp = new Date().toISOString();
   console.error(`[${timestamp}] Запуск waste-tracker...${DRY_RUN ? " (DRY RUN)" : ""}`);
 
-  // Динамический импорт ESM-модуля sheets.js из CJS
-  /** @type {{ readSheet: Function, PEPINO_SHEETS_ID: string }} */
-  let readSheet, PEPINO_SHEETS_ID;
-  try {
-    const sheetsModule = await import("./sheets.js");
-    readSheet = sheetsModule.readSheet;
-    PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
-  } catch (err) {
-    console.error(`[waste-tracker] Не удалось импортировать sheets.js: ${err.message}`);
-    process.exit(1);
-  }
+  // Throttled Telegram sender (dedup + rate limit + quiet hours)
+  let sendThrottled;
+  try { sendThrottled = require("./notification-throttle.cjs").sendThrottled; } catch { sendThrottled = null; }
 
-  // Параллельное чтение трёх листов
-  let productionRaw, salesRaw, inventoryRaw;
-  try {
-    [productionRaw, salesRaw, inventoryRaw] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F6D2} Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
-    ]);
-  } catch (err) {
-    const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
-    console.error(`[waste-tracker] ${msg}`);
-    if (!DRY_RUN) {
-      const { sendAlert } = require("./telegram-helper.cjs");
-      await sendAlert(`!!! Waste Tracker FAIL\n${msg}`, TG_THREAD_WASTE);
+  // farm-state cache (avoids direct Sheets API calls when fresh)
+  let farmState = null;
+  try { farmState = await require("./farm-state.cjs").getState(); } catch {}
+
+  // Загрузка данных — из кеша или напрямую
+  let productionRows, salesRows, inventoryRows;
+
+  if (farmState) {
+    productionRows = farmState.production || [];
+    salesRows = farmState.sales || [];
+    inventoryRows = farmState.inventory || [];
+    console.error(`[waste-tracker] Данные из farm-state (возраст: ${Math.round((Date.now() - new Date(farmState.updatedAt || 0)) / 60000)}мин)`);
+  } else {
+    // Динамический импорт ESM-модуля sheets.js из CJS
+    /** @type {{ readSheet: Function, PEPINO_SHEETS_ID: string }} */
+    let readSheet, PEPINO_SHEETS_ID;
+    try {
+      const sheetsModule = await import("./sheets.js");
+      readSheet = sheetsModule.readSheet;
+      PEPINO_SHEETS_ID = sheetsModule.PEPINO_SHEETS_ID;
+    } catch (err) {
+      console.error(`[waste-tracker] Не удалось импортировать sheets.js: ${err.message}`);
+      process.exit(1);
     }
-    process.exit(1);
-  }
 
-  // Парсинг строк в объекты
-  const productionRows = rowsToObjects(productionRaw);
-  const salesRows = rowsToObjects(salesRaw);
-  const inventoryRows = rowsToObjects(inventoryRaw);
+    // Параллельное чтение трёх листов
+    let productionRaw, salesRaw, inventoryRaw;
+    try {
+      [productionRaw, salesRaw, inventoryRaw] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F6D2} Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
+      ]);
+    } catch (err) {
+      const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
+      console.error(`[waste-tracker] ${msg}`);
+      if (!DRY_RUN) {
+        const { sendAlert } = require("./telegram-helper.cjs");
+        await sendAlert(`!!! Waste Tracker FAIL\n${msg}`, TG_THREAD_WASTE);
+      }
+      process.exit(1);
+    }
+
+    productionRows = rowsToObjects(productionRaw);
+    salesRows = rowsToObjects(salesRaw);
+    inventoryRows = rowsToObjects(inventoryRaw);
+  }
 
   console.error(
     `[waste-tracker] Загружено: производство=${productionRows.length}, ` +
@@ -513,11 +530,10 @@ async function main() {
   if (!DRY_RUN) {
     const report = formatTelegramReport(wasteItems, summary);
     try {
-      await send(report, {
-        silent: highWasteCount === 0,
-        threadId: TG_THREAD_WASTE,
-        parseMode: "HTML",
-      });
+      const sender = sendThrottled || send;
+      await sender(report, sendThrottled
+        ? { thread: TG_THREAD_WASTE, parseMode: "HTML", priority: highWasteCount > 0 ? "high" : "normal", silent: highWasteCount === 0 }
+        : { silent: highWasteCount === 0, threadId: TG_THREAD_WASTE, parseMode: "HTML" });
       console.error("[waste-tracker] Отчёт отправлен в Telegram");
     } catch (err) {
       console.error(`[waste-tracker] Ошибка отправки в Telegram: ${err.message}`);

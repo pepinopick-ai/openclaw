@@ -512,30 +512,48 @@ async function main() {
   const startMs = Date.now();
   console.log(`[${new Date().toISOString()}] CEO Weekly Digest starting...`);
 
-  // Читаем все листы параллельно
+  // Throttled Telegram sender (dedup + rate limit + quiet hours)
+  let sendThrottled;
+  try { sendThrottled = require("./notification-throttle.cjs").sendThrottled; } catch { sendThrottled = null; }
+
+  // farm-state cache (avoids direct Sheets API calls when fresh)
+  let farmState = null;
+  try { farmState = await require("./farm-state.cjs").getState(); } catch {}
+
+  // Читаем все листы — из кеша или напрямую
   let sales, expenses, production, inventory, alerts, tasks;
 
-  try {
-    const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
+  if (farmState) {
+    sales = farmState.sales || [];
+    expenses = farmState.expenses || [];
+    production = farmState.production || [];
+    inventory = farmState.inventory || [];
+    alerts = farmState.alerts || [];
+    tasks = farmState.tasks || [];
+    console.log(`[cache] Данные из farm-state (возраст: ${Math.round((Date.now() - new Date(farmState.updatedAt || 0)) / 60000)}мин)`);
+  } else {
+    try {
+      const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
 
-    const [salesRaw, expRaw, prodRaw, invRaw, alertsRaw, tasksRaw] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
-      readSheet(PEPINO_SHEETS_ID, "🌿 Производство"),
-      readSheet(PEPINO_SHEETS_ID, "📦 Склад"),
-      readSheet(PEPINO_SHEETS_ID, "⚠️ Алерты"),
-      readSheet(PEPINO_SHEETS_ID, "📋 Задачи"),
-    ]);
+      const [salesRaw, expRaw, prodRaw, invRaw, alertsRaw, tasksRaw] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
+        readSheet(PEPINO_SHEETS_ID, "🌿 Производство"),
+        readSheet(PEPINO_SHEETS_ID, "📦 Склад"),
+        readSheet(PEPINO_SHEETS_ID, "⚠️ Алерты"),
+        readSheet(PEPINO_SHEETS_ID, "📋 Задачи"),
+      ]);
 
-    sales = toObjects(salesRaw);
-    expenses = toObjects(expRaw);
-    production = toObjects(prodRaw);
-    inventory = toObjects(invRaw);
-    alerts = toObjects(alertsRaw);
-    tasks = toObjects(tasksRaw);
-  } catch (err) {
-    console.error(`[FATAL] Не удалось прочитать Google Sheets: ${err.message}`);
-    process.exit(1);
+      sales = toObjects(salesRaw);
+      expenses = toObjects(expRaw);
+      production = toObjects(prodRaw);
+      inventory = toObjects(invRaw);
+      alerts = toObjects(alertsRaw);
+      tasks = toObjects(tasksRaw);
+    } catch (err) {
+      console.error(`[FATAL] Не удалось прочитать Google Sheets: ${err.message}`);
+      process.exit(1);
+    }
   }
 
   console.log(
@@ -574,11 +592,14 @@ async function main() {
   // Отправка в Telegram
   if (!DRY_RUN) {
     try {
-      const result = await sendReport(digest, TOPIC_RESULTS, "HTML");
-      if (result.ok) {
+      const sender = sendThrottled || sendReport;
+      const result = await sender(digest, sendThrottled ? { thread: TOPIC_RESULTS, parseMode: "HTML", priority: "normal" } : TOPIC_RESULTS, sendThrottled ? undefined : "HTML");
+      if (result && result.ok) {
         console.log("[OK] Digest sent to Telegram");
-      } else {
+      } else if (result && result.error) {
         console.error(`[ERROR] Telegram: ${result.error}`);
+      } else {
+        console.log("[OK] Digest sent to Telegram");
       }
     } catch (err) {
       console.error(`[ERROR] Telegram: ${err.message}`);
