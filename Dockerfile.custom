@@ -5,5 +5,4 @@ RUN apt-get update && apt-get install -y \
     tmux \
     ripgrep \
     && rm -rf /var/lib/apt/lists/*
-RUN npm i -g openclaw@2026.3.13 --force 2>/dev/null || true
 USER node
