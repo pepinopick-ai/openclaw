@@ -31,6 +31,14 @@ const TG_THREAD_ID = 20; // Стратегия/Директор
 const DRY_RUN = process.argv.includes("--dry-run");
 const SEND_TG = process.argv.includes("--telegram") || !DRY_RUN;
 
+// Throttled sender с fallback на прямую отправку
+let sendThrottled;
+try {
+  sendThrottled = require("./notification-throttle.cjs").sendThrottled;
+} catch {
+  sendThrottled = null;
+}
+
 // Минимум недель истории для прогноза
 const MIN_WEEKS_FOR_FORECAST = 3;
 // Минимум заказов клиента для прогноза следующего заказа
@@ -435,15 +443,16 @@ async function main() {
   const startMs = Date.now();
   console.log(`[${new Date().toISOString()}] Demand predictor starting...`);
 
-  // Загрузка данных из Sheets
-  let sales;
+  // Попытка загрузить данные из farm-state кеша
+  let farmState = null;
   try {
-    const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
-    const rows = await readSheet(PEPINO_SHEETS_ID, "🛒 Продажи");
-    if (!rows || rows.length < 2) {
-      console.log("Нет данных о продажах.");
-      return;
-    }
+    farmState = await require("./farm-state.cjs").getState();
+  } catch {}
+
+  // Загрузка данных: предпочитаем farm-state кеш, fallback на Sheets
+  let sales;
+  if (farmState && farmState.sales && farmState.sales.length >= 2) {
+    const rows = farmState.sales;
     const headers = rows[0];
     sales = rows.slice(1).map((row) => {
       const obj = {};
@@ -452,9 +461,27 @@ async function main() {
       });
       return obj;
     });
-  } catch (err) {
-    console.error(`[ERROR] Не удалось прочитать данные: ${err.message}`);
-    process.exit(1);
+    console.log("Данные загружены из farm-state кеша");
+  } else {
+    try {
+      const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
+      const rows = await readSheet(PEPINO_SHEETS_ID, "🛒 Продажи");
+      if (!rows || rows.length < 2) {
+        console.log("Нет данных о продажах.");
+        return;
+      }
+      const headers = rows[0];
+      sales = rows.slice(1).map((row) => {
+        const obj = {};
+        headers.forEach((h, i) => {
+          obj[h] = row[i] || "";
+        });
+        return obj;
+      });
+    } catch (err) {
+      console.error(`[ERROR] Не удалось прочитать данные: ${err.message}`);
+      process.exit(1);
+    }
   }
 
   console.log(`Загружено ${sales.length} записей продаж`);
@@ -486,7 +513,8 @@ async function main() {
   // Telegram
   if (SEND_TG) {
     try {
-      await telegramSend(report);
+      const sender = sendThrottled || telegramSend;
+      await sender(report, { thread: TG_THREAD_ID, priority: "normal" });
       console.log("[OK] Прогноз отправлен в Telegram");
     } catch (err) {
       console.error(`[ERROR] Telegram: ${err.message}`);

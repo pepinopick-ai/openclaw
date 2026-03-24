@@ -19,6 +19,14 @@ const { trace } = require("./langfuse-trace.cjs");
 const { sendReport } = require("./telegram-helper.cjs");
 const { analyzeClients } = require("./client-analytics.cjs");
 
+// Throttled sender с fallback на прямую отправку
+let sendThrottled;
+try {
+  sendThrottled = require("./notification-throttle.cjs").sendThrottled;
+} catch {
+  sendThrottled = null;
+}
+
 const DRY_RUN = process.argv.includes("--dry-run");
 const TG_THREAD_ID = 20; // Стратегия/Директор
 
@@ -200,6 +208,12 @@ async function main() {
   console.log(`[${new Date().toISOString()}] Client outreach starting...`);
   if (DRY_RUN) console.log("[DRY RUN] Задачи не будут записаны в Sheets");
 
+  // Попытка загрузить данные из farm-state кеша
+  let farmState = null;
+  try {
+    farmState = await require("./farm-state.cjs").getState();
+  } catch {}
+
   // 1. Анализ клиентов через shared модуль
   const { clients, summary } = await analyzeClients();
 
@@ -230,15 +244,21 @@ async function main() {
 
   let taskRows = [];
   let taskHeaders = [];
-  try {
-    const tasksData = await readSheet(PEPINO_SHEETS_ID, "📋 Задачи");
-    if (tasksData && tasksData.length >= 1) {
-      taskHeaders = tasksData[0];
-      taskRows = tasksData.slice(1);
+  if (farmState && farmState.tasks && farmState.tasks.length >= 1) {
+    taskHeaders = farmState.tasks[0];
+    taskRows = farmState.tasks.slice(1);
+    console.log("Задачи загружены из farm-state кеша");
+  } else {
+    try {
+      const tasksData = await readSheet(PEPINO_SHEETS_ID, "📋 Задачи");
+      if (tasksData && tasksData.length >= 1) {
+        taskHeaders = tasksData[0];
+        taskRows = tasksData.slice(1);
+      }
+    } catch (err) {
+      console.error(`Не удалось прочитать задачи: ${err.message}`);
+      // Продолжаем без дедупликации — лучше дубль, чем пропуск
     }
-  } catch (err) {
-    console.error(`Не удалось прочитать задачи: ${err.message}`);
-    // Продолжаем без дедупликации — лучше дубль, чем пропуск
   }
   console.log(`Существующих задач: ${taskRows.length}`);
 
@@ -271,11 +291,16 @@ async function main() {
 
   if (!DRY_RUN) {
     try {
-      const tgResult = await sendReport(report, TG_THREAD_ID, "HTML");
-      if (tgResult.ok) {
+      if (sendThrottled) {
+        await sendThrottled(report, { thread: TG_THREAD_ID, priority: "normal" });
         console.log("[OK] Отчёт отправлен в Telegram");
       } else {
-        console.error(`[ERROR] Telegram: ${tgResult.error}`);
+        const tgResult = await sendReport(report, TG_THREAD_ID, "HTML");
+        if (tgResult.ok) {
+          console.log("[OK] Отчёт отправлен в Telegram");
+        } else {
+          console.error(`[ERROR] Telegram: ${tgResult.error}`);
+        }
       }
     } catch (err) {
       console.error(`[ERROR] Telegram: ${err.message}`);

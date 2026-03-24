@@ -24,6 +24,14 @@ const path = require("path");
 const { trace } = require("./langfuse-trace.cjs");
 const { send } = require("./telegram-helper.cjs");
 
+// Throttled sender с fallback на прямую отправку
+let sendThrottled;
+try {
+  sendThrottled = require("./notification-throttle.cjs").sendThrottled;
+} catch {
+  sendThrottled = null;
+}
+
 // -- Конфигурация -------------------------------------------------------------
 
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -557,7 +565,13 @@ async function main() {
       `(${todayStr} + ${tomorrowStr})${DRY_RUN ? " [DRY RUN]" : ""}`,
   );
 
-  // 1. Загрузка данных из Google Sheets
+  // Попытка загрузить данные из farm-state кеша
+  let farmState = null;
+  try {
+    farmState = await require("./farm-state.cjs").getState();
+  } catch {}
+
+  // 1. Загрузка данных: предпочитаем farm-state кеш, fallback на Google Sheets
   /** @type {{ readSheet: Function, PEPINO_SHEETS_ID: string }} */
   let readSheet, PEPINO_SHEETS_ID;
   try {
@@ -569,26 +583,31 @@ async function main() {
     process.exit(1);
   }
 
-  let salesRaw;
-  try {
-    salesRaw = await readSheet(
-      PEPINO_SHEETS_ID,
-      "\u{1F6D2} \u041F\u0440\u043E\u0434\u0430\u0436\u0438",
-    );
-  } catch (err) {
-    const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
-    console.error(`[delivery-optimizer] ${msg}`);
-    if (!DRY_RUN) {
-      await send(`!!! Delivery Optimizer FAIL\n${msg}`, {
-        silent: false,
-        threadId: TG_THREAD_DELIVERY,
-        parseMode: "HTML",
-      });
+  let salesRows;
+  if (farmState && farmState.sales && farmState.sales.length >= 2) {
+    salesRows = rowsToObjects(farmState.sales);
+    console.error("[delivery-optimizer] Данные загружены из farm-state кеша");
+  } else {
+    let salesRaw;
+    try {
+      salesRaw = await readSheet(
+        PEPINO_SHEETS_ID,
+        "\u{1F6D2} \u041F\u0440\u043E\u0434\u0430\u0436\u0438",
+      );
+    } catch (err) {
+      const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
+      console.error(`[delivery-optimizer] ${msg}`);
+      if (!DRY_RUN) {
+        await send(`!!! Delivery Optimizer FAIL\n${msg}`, {
+          silent: false,
+          threadId: TG_THREAD_DELIVERY,
+          parseMode: "HTML",
+        });
+      }
+      process.exit(1);
     }
-    process.exit(1);
+    salesRows = rowsToObjects(salesRaw);
   }
-
-  const salesRows = rowsToObjects(salesRaw);
   console.error(`[delivery-optimizer] Загружено продаж: ${salesRows.length}`);
 
   // 2. Загрузка профилей клиентов
@@ -605,11 +624,15 @@ async function main() {
     console.log(emptyMsg.replace(/<[^>]+>/g, ""));
 
     if (!DRY_RUN) {
-      await send(emptyMsg, {
-        silent: true,
-        threadId: TG_THREAD_DELIVERY,
-        parseMode: "HTML",
-      });
+      if (sendThrottled) {
+        await sendThrottled(emptyMsg, { thread: TG_THREAD_DELIVERY, priority: "normal" });
+      } else {
+        await send(emptyMsg, {
+          silent: true,
+          threadId: TG_THREAD_DELIVERY,
+          parseMode: "HTML",
+        });
+      }
     }
 
     await trace({
@@ -690,11 +713,15 @@ async function main() {
   // 7. Отправка в Telegram
   if (!DRY_RUN) {
     try {
-      await send(report, {
-        silent: false,
-        threadId: TG_THREAD_DELIVERY,
-        parseMode: "HTML",
-      });
+      if (sendThrottled) {
+        await sendThrottled(report, { thread: TG_THREAD_DELIVERY, priority: "normal" });
+      } else {
+        await send(report, {
+          silent: false,
+          threadId: TG_THREAD_DELIVERY,
+          parseMode: "HTML",
+        });
+      }
       console.error("[delivery-optimizer] Отправлено в Telegram");
     } catch (err) {
       console.error(`[delivery-optimizer] Ошибка отправки в Telegram: ${err.message}`);

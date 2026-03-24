@@ -23,6 +23,14 @@ const https = require("https");
 const { trace } = require("./langfuse-trace.cjs");
 const { normalize } = require("./product-aliases.cjs");
 
+// Throttled sender с fallback на прямую отправку
+let sendThrottled;
+try {
+  sendThrottled = require("./notification-throttle.cjs").sendThrottled;
+} catch {
+  sendThrottled = null;
+}
+
 // ── Конфигурация ──────────────────────────────────────────────────────────────
 
 const TG_TOKEN = process.env.PEPINO_TG_TOKEN || "8711358749:AAF7QJRW2NdwNYGAp2VjL_AOdQOang5Wv00";
@@ -483,23 +491,44 @@ async function main() {
   const startMs = Date.now();
   console.log(`[${new Date().toISOString()}] Margin Optimizer starting...`);
 
-  // Загрузка данных из Sheets
-  let salesRows, expenseRows, productionRows;
+  // Попытка загрузить данные из farm-state кеша
+  let farmState = null;
   try {
-    const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
-    [salesRows, expenseRows, productionRows] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
-      readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
-      readSheet(PEPINO_SHEETS_ID, "🌿 Производство"),
-    ]);
-  } catch (err) {
-    console.error(`[FATAL] Не удалось загрузить данные из Sheets: ${err.message}`);
-    process.exit(1);
-  }
+    farmState = await require("./farm-state.cjs").getState();
+  } catch {}
 
-  const sales = rowsToObjects(salesRows);
-  const expenses = rowsToObjects(expenseRows);
-  const production = rowsToObjects(productionRows);
+  // Загрузка данных: предпочитаем farm-state кеш, fallback на Sheets
+  let sales, expenses, production;
+  if (
+    farmState &&
+    farmState.sales &&
+    farmState.sales.length >= 2 &&
+    farmState.expenses &&
+    farmState.expenses.length >= 2 &&
+    farmState.production &&
+    farmState.production.length >= 2
+  ) {
+    sales = rowsToObjects(farmState.sales);
+    expenses = rowsToObjects(farmState.expenses);
+    production = rowsToObjects(farmState.production);
+    console.log("Данные загружены из farm-state кеша");
+  } else {
+    let salesRows, expenseRows, productionRows;
+    try {
+      const { readSheet, PEPINO_SHEETS_ID } = await import("./sheets.js");
+      [salesRows, expenseRows, productionRows] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "🛒 Продажи"),
+        readSheet(PEPINO_SHEETS_ID, "💰 Расходы"),
+        readSheet(PEPINO_SHEETS_ID, "🌿 Производство"),
+      ]);
+    } catch (err) {
+      console.error(`[FATAL] Не удалось загрузить данные из Sheets: ${err.message}`);
+      process.exit(1);
+    }
+    sales = rowsToObjects(salesRows);
+    expenses = rowsToObjects(expenseRows);
+    production = rowsToObjects(productionRows);
+  }
 
   console.log(
     `Загружено: продажи=${sales.length}, расходы=${expenses.length}, производство=${production.length}`,
@@ -537,7 +566,8 @@ async function main() {
   // Отправка в Telegram
   if (SEND_TG) {
     try {
-      await telegramSend(report);
+      const sender = sendThrottled || telegramSend;
+      await sender(report, { thread: TG_THREAD_ID, priority: "normal" });
       console.log("[OK] Отчёт отправлен в Telegram (thread 20)");
     } catch (err) {
       console.error(`[ERROR] Telegram: ${err.message}`);

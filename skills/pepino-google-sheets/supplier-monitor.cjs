@@ -585,6 +585,12 @@ async function main() {
   const timestamp = new Date().toISOString();
   console.error(`[${timestamp}] Запуск supplier-monitor...${DRY_RUN ? " (DRY RUN)" : ""}`);
 
+  // Попытка загрузить данные из farm-state кеша
+  let farmState = null;
+  try {
+    farmState = await require("./farm-state.cjs").getState();
+  } catch {}
+
   // Динамический импорт ESM-модуля sheets.js из CJS
   /** @type {{ readSheet: Function, PEPINO_SHEETS_ID: string }} */
   let readSheet, PEPINO_SHEETS_ID;
@@ -597,21 +603,28 @@ async function main() {
     process.exit(1);
   }
 
-  // Параллельное чтение трёх листов
+  // Чтение данных: предпочитаем farm-state кеш, fallback на прямые вызовы Sheets
   let inventoryRaw, productionRaw, expensesRaw;
-  try {
-    [inventoryRaw, productionRaw, expensesRaw] = await Promise.all([
-      readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
-      readSheet(PEPINO_SHEETS_ID, "\u{1F4B0} Расходы"),
-    ]);
-  } catch (err) {
-    const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
-    console.error(`[supplier-monitor] ${msg}`);
-    if (!DRY_RUN) {
-      await sendAlert(`!!! Supplier Monitor FAIL\n${msg}`, TG_THREAD_SUPPLIER);
+  if (farmState && farmState.inventory && farmState.production && farmState.expenses) {
+    inventoryRaw = farmState.inventory;
+    productionRaw = farmState.production;
+    expensesRaw = farmState.expenses;
+    console.error("[supplier-monitor] Данные загружены из farm-state кеша");
+  } else {
+    try {
+      [inventoryRaw, productionRaw, expensesRaw] = await Promise.all([
+        readSheet(PEPINO_SHEETS_ID, "\u{1F4E6} Склад"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F33F} Производство"),
+        readSheet(PEPINO_SHEETS_ID, "\u{1F4B0} Расходы"),
+      ]);
+    } catch (err) {
+      const msg = `Не удалось прочитать Google Sheets: ${err.message}`;
+      console.error(`[supplier-monitor] ${msg}`);
+      if (!DRY_RUN) {
+        await sendAlert(`!!! Supplier Monitor FAIL\n${msg}`, TG_THREAD_SUPPLIER);
+      }
+      process.exit(1);
     }
-    process.exit(1);
   }
 
   // Парсинг строк в объекты
